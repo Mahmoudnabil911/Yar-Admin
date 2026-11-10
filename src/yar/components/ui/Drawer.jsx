@@ -8,7 +8,7 @@ export function Drawer({
   eyebrow = 'تفاصيل الحجز',
   badgeText,
   title = '',
-  children,
+  children
 }) {
   const isDrawerOpen = open !== undefined ? Boolean(open) : Boolean(isOpen);
 
@@ -43,9 +43,7 @@ export function Drawer({
       >
         <header>
           <div>
-            <span className="eyebrow" id="drawer-eyebrow">
-              {eyebrowText}
-            </span>
+            <span className="eyebrow" id="drawer-eyebrow">{eyebrowText}</span>
             <h2 id="drawer-title">{title}</h2>
           </div>
           <button
