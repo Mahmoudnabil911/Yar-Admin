@@ -4,3 +4,51 @@
 .account-page{--public-line:oklch(.87 .012 164);--public-paper:oklch(.986 .004 100);--public-ink:oklch(.27 .024 164)}
 .dark .account-page{--public-line:oklch(.37 .02 164);--public-paper:oklch(.21 .02 164);--public-ink:oklch(.94 .012 85)}
 .notification-item.unread{border-inline-start:3px solid var(--public-gold)}
+/* Notification tabs: explicit active and hover styling in both light and dark mode */
+.notification-panel .account-tabs {
+  gap: 8px;
+}
+.notification-panel .account-tabs button {
+  transition: background-color .15s ease, color .15s ease, opacity .15s ease;
+  font-weight: 500;
+  border-radius: 6px;
+}
+/* Unselected (ghost) tabs */
+.notification-panel .account-tabs button:not(.bg-primary) {
+  background: transparent !important;
+  color: var(--public-ink) !important;
+}
+.notification-panel .account-tabs button:not(.bg-primary):hover {
+  background: var(--public-cream) !important;
+  color: var(--public-forest) !important;
+}
+.dark .notification-panel .account-tabs button:not(.bg-primary) {
+  color: var(--public-ink) !important;
+}
+.dark .notification-panel .account-tabs button:not(.bg-primary):hover {
+  background: oklch(.28 .025 164) !important;
+  color: var(--public-cream) !important;
+}
+
+/* Selected (default / active) tab - Light Mode */
+.notification-panel .account-tabs button.bg-primary {
+  background: var(--public-forest) !important;
+  color: var(--public-cream) !important;
+}
+.notification-panel .account-tabs button.bg-primary:hover {
+  background: var(--public-forest) !important;
+  color: var(--public-cream) !important;
+  opacity: 0.92;
+}
+
+/* Selected (default / active) tab - Dark Mode */
+.dark .notification-panel .account-tabs button.bg-primary {
+  background: var(--public-gold) !important;
+  color: var(--public-forest) !important;
+  font-weight: 600;
+}
+.dark .notification-panel .account-tabs button.bg-primary:hover {
+  background: var(--public-gold) !important;
+  color: var(--public-forest) !important;
+  opacity: 0.92;
+}
