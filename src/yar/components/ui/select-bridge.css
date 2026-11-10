@@ -2,54 +2,89 @@
    Custom Select Chevron Arrow & Dropdown Bridge Styling
    ================================================================ */
 
-/* Custom styled select with single clean chevron icon */
-select {
+/* Wrapper created around select element */
+.yar-select-wrapper {
+  position: relative !important;
+  display: inline-block !important;
+  width: 100% !important;
+  vertical-align: middle !important;
+}
+
+/* Base select field */
+.yar-select-wrapper select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-image: none !important; /* Managed via HTML icon */
+  padding-inline-start: 36px !important;
+  padding-inline-end: 12px !important;
+  cursor: pointer !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease !important;
+}
+
+[dir="ltr"] .yar-select-wrapper select,
+html[dir="ltr"] .yar-select-wrapper select {
+  padding-inline-start: 12px !important;
+  padding-inline-end: 36px !important;
+}
+
+/* Real DOM Chevron Arrow with genuine CSS rotation transition */
+.yar-select-arrow {
+  position: absolute !important;
+  inset-block-start: 50% !important;
+  inset-inline-start: 12px !important;
+  width: 16px !important;
+  height: 16px !important;
+  margin-top: -8px !important;
+  pointer-events: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--ink, #18352c);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease !important;
+  transform: rotate(0deg);
+  transform-origin: center center !important;
+}
+
+[dir="ltr"] .yar-select-arrow,
+html[dir="ltr"] .yar-select-arrow {
+  inset-inline-start: auto !important;
+  inset-inline-end: 12px !important;
+}
+
+/* Dark mode default arrow */
+html.dark .yar-select-arrow,
+.dark .yar-select-arrow {
+  color: #efe4d2;
+}
+
+/* When dropdown is open: smoothly rotates 180 degrees and turns gold */
+.yar-select-wrapper.is-open .yar-select-arrow,
+select[data-yar-open="true"] + .yar-select-arrow,
+select.yar-select-open + .yar-select-arrow {
+  transform: rotate(180deg) !important;
+  color: var(--gold, #ba9450) !important;
+}
+
+/* Fallback for any unadorned select without wrapper */
+select:not(.yar-select-wrapped) {
   -webkit-appearance: none !important;
   -moz-appearance: none !important;
   appearance: none !important;
   background-repeat: no-repeat !important;
   background-size: 16px 16px !important;
   background-position: left 12px center !important;
-  /* Light mode: single clean arrow pointing DOWN */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2318352c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
   padding-inline-start: 36px !important;
-  cursor: pointer;
 }
 
-[dir="ltr"] select,
-html[dir="ltr"] select {
+[dir="ltr"] select:not(.yar-select-wrapped) {
   background-position: right 12px center !important;
   padding-inline-start: 12px !important;
   padding-inline-end: 36px !important;
 }
 
-/* When the select dropdown is open, flip arrow to point UP (Gold) */
-select[data-yar-open="true"],
-select.yar-select-open {
-  background-repeat: no-repeat !important;
-  background-size: 16px 16px !important;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23ba9450' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m18 15-6-6-6 6'/%3E%3C/svg%3E") !important;
-}
-
-/* Dark mode: single cream arrow pointing DOWN */
-html.dark select,
-.dark select {
-  background-repeat: no-repeat !important;
-  background-size: 16px 16px !important;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23efe4d2' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
-}
-
-/* Dark mode when open: arrow pointing UP (Gold) */
-html.dark select[data-yar-open="true"],
-html.dark select.yar-select-open,
-.dark select[data-yar-open="true"],
-.dark select.yar-select-open {
-  background-repeat: no-repeat !important;
-  background-size: 16px 16px !important;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23ba9450' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m18 15-6-6-6 6'/%3E%3C/svg%3E") !important;
-}
-
-/* Dropdown Popup Panel */
+/* Dropdown Popup Panel with smooth entry transition */
 .yar-select-portal {
   position: fixed;
   z-index: 1000;
@@ -63,6 +98,18 @@ html.dark select.yar-select-open,
   max-height: 280px;
   font-family: inherit;
   padding: 4px;
+  animation: yarDropdownFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes yarDropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .dark .yar-select-portal,

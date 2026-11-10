@@ -4,6 +4,9 @@ import { Check } from 'lucide-react';
 import { usePrefs } from '../../i18n/prefs';
 import './select-bridge.css';
 
+// SVG markup for ChevronDown arrow
+const CHEVRON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
+
 export default function SelectBridge() {
   const { lang } = usePrefs();
   const [target, setTarget] = useState(null);
@@ -12,16 +15,61 @@ export default function SelectBridge() {
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
   const panelRef = useRef(null);
 
-  // Keep track of target to toggle open/close class and attribute
+  // Decorate select elements in DOM with a wrapper and rotating SVG chevron
+  useEffect(() => {
+    const decorateSelect = (select) => {
+      if (!select || select.classList.contains('yar-select-wrapped')) return;
+      if (select.closest('.yar-select-wrapper')) return;
+
+      const parent = select.parentElement;
+      if (!parent) return;
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'yar-select-wrapper';
+
+      const arrow = document.createElement('span');
+      arrow.className = 'yar-select-arrow';
+      arrow.setAttribute('aria-hidden', 'true');
+      arrow.innerHTML = CHEVRON_SVG;
+
+      // Insert wrapper in place of select, then put select & arrow inside wrapper
+      parent.insertBefore(wrapper, select);
+      wrapper.appendChild(select);
+      wrapper.appendChild(arrow);
+      select.classList.add('yar-select-wrapped');
+    };
+
+    const scanAndDecorate = () => {
+      document.querySelectorAll('select:not(.yar-select-wrapped)').forEach(decorateSelect);
+    };
+
+    scanAndDecorate();
+
+    const observer = new MutationObserver(() => {
+      scanAndDecorate();
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  // Update target wrapper open status for smooth chevron rotation
   useEffect(() => {
     if (target) {
       target.setAttribute('data-yar-open', 'true');
       target.classList.add('yar-select-open');
+      const wrapper = target.closest('.yar-select-wrapper');
+      if (wrapper) wrapper.classList.add('is-open');
     }
     return () => {
       if (target) {
         target.removeAttribute('data-yar-open');
         target.classList.remove('yar-select-open');
+        const wrapper = target.closest('.yar-select-wrapper');
+        if (wrapper) wrapper.classList.remove('is-open');
       }
     };
   }, [target]);
