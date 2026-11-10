@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export const HOTEL_MODEL_VERSION: number;
 type Any = Record<string, any>;
 export function nightsBetween(checkIn: string, checkOut: string): string[];

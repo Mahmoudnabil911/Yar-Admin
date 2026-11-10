@@ -8,18 +8,23 @@ export function Drawer({
   eyebrow = 'تفاصيل الحجز',
   badgeText,
   title = '',
-  children
+  children,
 }) {
   const isDrawerOpen = open !== undefined ? Boolean(open) : Boolean(isOpen);
 
   useEffect(() => {
+    if (!isDrawerOpen) return undefined;
     function onKeyDown(e) {
-      if (e.key === 'Escape' && isDrawerOpen) {
+      if (e.key === 'Escape') {
         onClose?.();
       }
     }
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    document.body.classList.add('no-scroll');
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      document.body.classList.remove('no-scroll');
+    };
   }, [isDrawerOpen, onClose]);
 
   if (!isDrawerOpen) return null;
@@ -38,7 +43,9 @@ export function Drawer({
       >
         <header>
           <div>
-            <span className="eyebrow" id="drawer-eyebrow">{eyebrowText}</span>
+            <span className="eyebrow" id="drawer-eyebrow">
+              {eyebrowText}
+            </span>
             <h2 id="drawer-title">{title}</h2>
           </div>
           <button

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
 import { minimumRoomPrice, startingRates, includesBreakfast, quoteStay, availabilityFor, seasonError, occupancyError, migrateHotel, nightsBetween, offerSnapshot, publishChecklist, matchHotel, emptyHotelFilters, supplierTotal } from '@/yar/services/hotelPricing';
 import { sampleResort } from '@/yar/services/models/hotel-schema';
