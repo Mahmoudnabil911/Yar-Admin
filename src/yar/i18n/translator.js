@@ -9,7 +9,9 @@ const exact = new Map();
 const patterns = [];
 for (const [ar, en] of Object.entries(EN)) {
   if (ar.includes('{0}')) {
-    const esc = norm(ar).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('\\{0\\}', '(.+?)');
+    const esc = norm(ar)
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/\\\{(\d+)\\\}/g, '(.+?)');
     patterns.push([new RegExp(`^${esc}$`), en]);
   } else exact.set(norm(ar), en);
 }
@@ -18,7 +20,17 @@ const AR = /[\u0600-\u06FF]/;
 export function translateString(value) {
   if (!value || !AR.test(value)) return null;
   const key = norm(value);
-  const hit = exact.get(key);
+  let hit = exact.get(key);
+  if (hit === undefined) {
+    const mPunc = key.match(/^(.+?)\s*([·:،,\.\-\–\—])\s*$/);
+    if (mPunc) {
+      const baseHit = exact.get(mPunc[1]);
+      if (baseHit !== undefined) {
+        const sep = mPunc[2] === '،' ? ',' : (mPunc[2] === '·' ? '·' : mPunc[2]);
+        hit = `${baseHit} ${sep}`;
+      }
+    }
+  }
   if (hit !== undefined) {
     const lead = value.match(/^\s*/)[0];
     const trail = value.match(/\s*$/)[0];
@@ -26,7 +38,17 @@ export function translateString(value) {
   }
   for (const [re, en] of patterns) {
     const m = key.match(re);
-    if (m) return en.replace('{0}', exact.get(norm(m[1])) ?? m[1]);
+    if (m) {
+      let res = en;
+      for (let i = 1; i < m.length; i++) {
+        const arg = m[i];
+        const transArg = exact.get(norm(arg)) ?? arg;
+        res = res.replace(new RegExp(`\\{${i - 1}\\}`, 'g'), transArg);
+      }
+      const lead = value.match(/^\s*/)[0];
+      const trail = value.match(/\s*$/)[0];
+      return lead + res + trail;
+    }
   }
   return null;
 }
