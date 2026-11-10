@@ -1,0 +1,101 @@
+{
+  "captured": "2026-11-06",
+  "source": "Approved YAR Expo demo src/domain.ts",
+  "hotelPhotos": [
+    "assets/external/image-03.jpg",
+    "assets/external/image-02.jpg",
+    "assets/external/image-06.jpg"
+  ],
+  "packageHotels": [
+    {
+      "id": "lotus",
+      "name": "لوتوس",
+      "detail": "4 نجوم · سويتات · الإمام الرضا 10",
+      "five": 275,
+      "seven": 300
+    },
+    {
+      "id": "kiana",
+      "name": "كيانا",
+      "detail": "الإمام الرضا 2",
+      "five": 285,
+      "seven": 310
+    },
+    {
+      "id": "qasr",
+      "name": "قصر بين‌الملل",
+      "detail": "5 نجوم · الإمام الرضا 12",
+      "five": 315,
+      "seven": 350
+    }
+  ],
+  "cars": [
+    {
+      "name": "سيارة سيدان",
+      "model": "تويوتا كامري أو ما يماثلها",
+      "seats": 3,
+      "bags": 2,
+      "base": 30,
+      "photos": [
+        "assets/external/image-05.jpg",
+        "assets/external/image-07.webp"
+      ]
+    },
+    {
+      "name": "سيارة عائلية",
+      "model": "تويوتا فورچونر أو ما يماثلها",
+      "seats": 5,
+      "bags": 3,
+      "base": 45,
+      "photos": [
+        "assets/external/image-08.webp",
+        "assets/external/image-09.webp"
+      ]
+    },
+    {
+      "name": "فان للمجموعات",
+      "model": "تويوتا هايس أو ما يماثلها",
+      "seats": 10,
+      "bags": 8,
+      "base": 70,
+      "photos": [
+        "assets/external/image-04.jpg",
+        "assets/external/image-01.jpeg"
+      ]
+    }
+  ],
+  "tours": [
+    {
+      "city": "مشهد",
+      "name": "اكتشف مدينة مشهد",
+      "hours": 4,
+      "price": 45,
+      "places": "محيط حرم الإمام الرضا · بازار رضا · وقت حر للتسوّق",
+      "photo": "mashhad"
+    },
+    {
+      "city": "طهران",
+      "name": "معالم طهران",
+      "hours": 6,
+      "price": 65,
+      "places": "برج آزادي · قصر كلستان · البازار الكبير",
+      "photo": "tehran"
+    },
+    {
+      "city": "شمال إيران",
+      "name": "يوم في ماسوله",
+      "hours": 8,
+      "price": 85,
+      "places": "قرية ماسوله · الأزقة والأسواق المحلية · توقف للتصوير في الطبيعة",
+      "photo": "masuleh"
+    },
+    {
+      "city": "شيراز",
+      "name": "ألوان شيراز",
+      "hours": 5,
+      "price": 55,
+      "places": "مسجد نصير الملك · بازار وكيل · حديقة إرم",
+      "photo": "shiraz"
+    }
+  ]
+}

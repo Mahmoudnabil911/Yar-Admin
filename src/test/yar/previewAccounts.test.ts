@@ -1,0 +1,7 @@
+import {beforeEach,it,expect} from 'vitest';
+import * as R from '@/yar/accounts/repository';
+beforeEach(()=>localStorage.clear());
+const pass=Array.from({length:9},(_,i)=>i+1).join('');
+it('owner demo aliases sign in directly with their requested password',async()=>{await R.login('admin',pass);expect(R.currentAccount()?.role).toBe('admin');expect(R.currentAccount()?.mustChangePassword).toBe(false);R.logout();await R.login('booking',pass);expect(R.currentAccount()?.role).toBe('booking_employee');expect(R.currentAccount()?.mustChangePassword).toBe(false);expect(JSON.parse(localStorage.getItem(R.ACCOUNT_KEY)||'{}').users).toHaveLength(2);});
+it('wrong password cannot provision accounts',async()=>{await expect(R.login('admin','wrong')).rejects.toThrow('Incorrect');expect(localStorage.getItem(R.ACCOUNT_KEY)).toBeNull();});
+it('retains existing data and persists account changes rather than re-seeding',async()=>{localStorage.setItem(R.ACCOUNT_KEY,JSON.stringify({version:2,users:[],requests:[{id:'retained'}],notifications:[],audit:[],throttle:{}}));await R.login('admin',pass);const d=JSON.parse(localStorage.getItem(R.ACCOUNT_KEY)||'{}');expect(d.requests[0].id).toBe('retained');d.users.find((u:{username:string})=>u.username==='booking').status='inactive';localStorage.setItem(R.ACCOUNT_KEY,JSON.stringify(d));R.logout();await expect(R.login('booking',pass)).rejects.toThrow('inactive');});

@@ -1,0 +1,8 @@
+/* Readable brand text on light surfaces and dark navigation. */
+:root{--muted:var(--c-4c6056);--amber:var(--c-80571d);--red:var(--c-984b43);--blue:var(--c-3e627b)}
+.sidebar{color:var(--c-c5d2c9)}.sidebar-label,.profile small,.sidebar .version{color:var(--c-aebeaf)}
+.brand>span,.sidebar-note{color:var(--c-c4d0be)}.nav-count{color:var(--c-f0d59d)}
+.global-search input::placeholder,input::placeholder,textarea::placeholder{color:var(--c-5b6c61);opacity:1}
+.breadcrumb,.eyebrow,.page-heading p,.overview-ledger-note{color:var(--c-506258)}
+.metric-top,.metric-foot,.panel-heading p,.service-detail,.booking-id{color:var(--c-50634f)}
+.sidebar .nav-item.active,.sidebar .nav-item:hover{color:var(--c-efe4d2)}

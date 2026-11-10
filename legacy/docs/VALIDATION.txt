@@ -1,0 +1,152 @@
+YAR ADMIN DELIVERY VALIDATION
+Export date: 2026-11-09 (Asia/Baghdad)
+Scope: admin dashboard only
+Source commit: a8a6ef8b53a08287dfd90a6b80502e72cc1edd0e
+Node used for validation: v24.22.1
+
+PASS: 121 model tests; 0 failures.
+PASS: JavaScript syntax checks for all dist modules and serve.cjs.
+PASS: 61 static files served over local HTTP; exact byte matches.
+PASS: all index.html local script/style/asset references resolve.
+PASS: 9 external demo images bundled and verified as image files.
+PASS: original source preserved except 3 image-URL modules and the explicit
+      local-image allowlist in catalog.js; original four JS files retained.
+PASS: parity fixture image paths adapted only; original fixture retained.
+PASS: local browser hotel editor displays local image previews, all loaded;
+      saving the existing example succeeds with the local-image allowlist.
+PASS: PDF has 14 A4 pages with embedded text; rendered-page visual review.
+
+The export contains source demo fixtures, not live browser localStorage.
+No deployed-site edits were made for this export. No backend, secrets or
+React Native project is included. Remaining work is documented separately.
+
+MODEL TEST OUTPUT
+✔ demo data is deterministic, masked, and spread across 30 Baghdad dates after signup (15.7694ms)
+✔ Baghdad today and date shifts cross UTC midnight, month and leap-day boundaries (38.746ms)
+✔ empty periods keep zero-filled dates and return null rates without NaN (1.7064ms)
+✔ inclusive dates and platform filters apply to registrations, sessions and trends (1.717ms)
+✔ distinct session IDs drive duration, requests, breakdowns and a nested same-session funnel (0.7391ms)
+✔ anonymous browsers remain devices and earlier anonymous visits are not retrospectively accounts (0.7088ms)
+✔ returning devices require history before the period, matching the platform filter (0.6978ms)
+✔ new registrations and active registered accounts measure different things (2.7972ms)
+✔ request submissions include pending and cancelled requests without claiming confirmed bookings (1.0266ms)
+✔ user registration filters and status overrides retain all-time activity, and outputs are clones (1.1727ms)
+✔ behavior fixture is deterministic, independent, covers five services and all seven report families (102.7027ms)
+✔ repeated searches and views are events, unique identities and converted sessions are deduplicated (1.8553ms)
+✔ anonymous and identified sessions do not retroactively merge a shared browser identity (0.8589ms)
+✔ a booking converts only its linked destination when one session searches several routes (0.8216ms)
+✔ only linked confirmed bookings count; pending, cancelled, impossible and zero-result journeys do not (2.9133ms)
+✔ inclusive cohort dates and platform/service filters never leak later confirmations or earlier sessions (1.6072ms)
+✔ zero-result report counts searches and searchers without inventing a booking (0.538ms)
+✔ abandonment requires an ended session and never treats a submitted pending request as abandoned checkout (1.5239ms)
+✔ interest keeps hotel/package views and request links separate; hotel nights never become package days (1.2792ms)
+✔ campaign/offer attribution is the last prior click in the same session, never a later or other-session click (3.4941ms)
+✔ campaign spend/revenue stay in separate USD and IQD rows with no conversion or double counting (2.8104ms)
+✔ empty periods stay finite with null rates and validation rejects invalid filters without mutating data (1.1591ms)
+✔ all catalog seeds validate with their actual cross-catalog provider references (4.1731ms)
+✔ hotel policy fields are specific and availability is absent until explicitly entered (2.2663ms)
+✔ room periods use strict calendar dates and inclusive non-overlapping ranges per room (20.3615ms)
+✔ explicit zero availability is valid, but missing/fractional/negative stock and invalid prices are rejected (2.3649ms)
+✔ package options retain Expo IDs, prices and the correct independent two-image galleries (0.8151ms)
+✔ all vehicle capacities, photos and twelve city fares match the current Expo demo (0.6585ms)
+✔ the four tour seeds match Expo itinerary, duration, group capacity, prices and approved local images (4.0129ms)
+✔ tour publication validates price, duration, capacity, itinerary, galleries and scope (1.2536ms)
+✔ provider operations fields use shared defaults and fallback choices stay scoped to published flights (0.9931ms)
+✔ seed has complete published examples and one draft and one future notification (8.3985ms)
+✔ saving an incomplete draft never changes or leaks the independent published snapshot (5.2056ms)
+✔ only explicit publish replaces the live snapshot and clears pending changes (2.5456ms)
+✔ archive retains both versions and restore requires a fresh explicit publish (2.8843ms)
+✔ discarding changes preserves live content, while deleting a draft-only item removes that item (0.7928ms)
+✔ home and support remain singletons and cannot be archived (2.8919ms)
+✔ move swaps order within active items of one kind without touching archived or unrelated content (3.8675ms)
+✔ published schedules are inclusive and draft schedule changes never change live visibility (0.9185ms)
+✔ package references are checked when publishing, while incomplete drafts and hydration retain them (0.6617ms)
+✔ image validation allows only approved exact local paths or credential-free HTTPS URLs (1.0897ms)
+✔ normalization keeps schema strings, simple text and normalized phone numbers without executing HTML (0.6481ms)
+✔ safe hydration deduplicates IDs and singletons while preserving pending drafts and unavailable links (0.6122ms)
+✔ paid showcase is visible first, fully collected and issued with one supplier debit (420.1759ms)
+✔ acceptance data includes all services and statuses, reconciled payments/credit and is idempotent (289.3516ms)
+✔ existing records and supplier settings are retained, catalog examples have distinct identities (294.2382ms)
+✔ seeds validate, capabilities and configuration snapshots allow no credentials or card data (10.6289ms)
+✔ gateway validation rejects unsupported currencies/methods, ambiguous states and invalid fee precision (1.9329ms)
+✔ upserts preserve connection outcome, dedicated tests update it immutably and enabled order controls eligibility (7.0237ms)
+✔ fee quote charges the company only and rounds half cents/dinars exactly with fixed fees (2.3108ms)
+✔ timeout is a distinct saved simulation outcome and leaves the gateway unavailable until another test succeeds (2.2118ms)
+✔ versioned payload round trips clean config and test history while malformed saved state fails closed (3.6146ms)
+✔ demo log links supplied bookings only, covers statuses/refunds and never mutates booking payments (50.5693ms)
+✔ historical fee/name snapshots never change after the gateway configuration changes (9.817ms)
+✔ demo payments never precede known booking creation and refunds never run past the example date (2.3154ms)
+✔ transaction validation rejects duplicate IDs/references, precision errors and inconsistent snapshots (5.2777ms)
+✔ refunds require successful matching parents and reserve pending amounts without counting failed refunds (8.9256ms)
+✔ transaction date filters include Baghdad boundaries and exact booking links without changing input (8.1434ms)
+✔ reports exclude pending/refunds from success denominator and isolate currency totals/refunds/fees (9.6089ms)
+✔ CSV export preserves numeric values and escapes formula-like labels and quotes (0.6317ms)
+✔ legacy migration preserves identities and dates, declares derived costs and adds one demo tour (38.6218ms)
+✔ old rejected bookings migrate to cancelled without altering reasons or payment history (6.2938ms)
+✔ manual order fixes a precise currency snapshot and validates provider, source and masked contact (2.115ms)
+✔ workflow enforces legal transitions, complete service details, receipt and confirmation reference (6.8919ms)
+✔ payment review does not count as collected; approval is bounded and rejection has a reason (2.2069ms)
+✔ paid cancellation needs acknowledgement and never silently refunds; rejected paid orders are forbidden (2.1604ms)
+✔ flight receipts require full payment including review approval; old partial histories remain readable (5.4514ms)
+✔ binary payment filter excludes pending receipts, keeps refund history distinct and handles zero-price orders (3.2891ms)
+✔ partial and cumulative customer refunds cannot exceed accepted collection or bypass cancellation (3.4196ms)
+✔ supplier settlement is bounded by frozen cost and supports cancelled-payment recovery separately (6.5597ms)
+✔ report keeps currencies separate and distinguishes cancelled sales, refunds, margin and cash (6.1155ms)
+✔ assignment permissions, timeline and metadata remain independent of frozen pricing (2.8277ms)
+✔ versioned serialization restores monetary histories and rejects inconsistent snapshots atomically (2.2134ms)
+✔ scoped filters are inclusive and CSV neutralizes formulas with correct quotes and newlines (1.1357ms)
+✔ UI bootstrap restores before mount, keeps the compatibility array and returns independent clones (6.7489ms)
+✔ default markup is 10% over supplier cost, with a consciously disabled 20% discount (9.1139ms)
+✔ provider overrides service, service overrides general, and rules never stack (1.3309ms)
+✔ markup and discount resolve independently and discount is based on original retail (0.58ms)
+✔ selection excludes disabled, scheduled, expired, wrong currency and invalid provider rules (1.7572ms)
+✔ calendar states have inclusive boundaries and Baghdad day is independent of UTC (29.4914ms)
+✔ validation blocks exact-scope inclusive overlap but allows next-day boundaries and different scopes (0.9493ms)
+✔ validation rejects invalid dates, provider scope and nonpositive/nonfinite percentages (0.5409ms)
+✔ USD rounds to cents at each stage and IQD to whole dinars (0.6773ms)
+✔ percentage arithmetic preserves exact half-cent and half-dinar boundaries (1.9644ms)
+✔ fixed discounts cannot create negative final prices and below-cost losses stay visible (0.7269ms)
+✔ invalid costs and contexts fail explicitly instead of returning NaN or infinite totals (1.4502ms)
+✔ legacy blank scopes stay broad and the nine stable route codes normalize without mutating inputs (8.8797ms)
+✔ provider then service then general precedence remains stronger than the number of flight constraints (1.8546ms)
+✔ all populated fields must match and route direction never reverses implicitly (0.9023ms)
+✔ generic and more specific rules can coexist while equal-rank intersecting scopes cannot (0.9839ms)
+✔ scoped conflicts retain inclusive date boundaries and separate kind/currency/disabled rules (0.6852ms)
+✔ flight-only scopes reject unknown airports, same-city routes, nonalphanumeric carriers and unsupported cabins (1.1613ms)
+✔ paused providers are ineligible while legacy providers without operatingEnabled remain valid (0.4575ms)
+✔ scoped markup and discount resolve independently with existing USD rounding and loss controls (0.867ms)
+✔ tour rules support general and provider pricing in their own currency without flight scope (1.4108ms)
+✔ getRules loads persisted rules before mount and returns independent normalized snapshots (28.0603ms)
+✔ seed includes protected owner and the four legacy assignees with safe permissions (3.7055ms)
+✔ validates roles, statuses, names and explicit permission allowlist (0.5749ms)
+✔ owner cannot be disabled, demoted, cloned or lose a permission (1.208ms)
+✔ last active admin cannot be disabled or demoted until another active admin exists (1.2266ms)
+✔ upserts, status changes and serialized outputs never mutate inputs (0.8414ms)
+✔ versioned payload restores staff and action history while stripping unrelated fields (6.0784ms)
+✔ hydration rejects duplicate IDs, missing owner and unsafe admin state (0.9468ms)
+✔ demo populates three linked tickets, topup, partial return and preserves existing movements (56.7147ms)
+✔ statement separates debit and credit with chronological running balance and frozen PNR/route (1.5902ms)
+✔ 1000 credit less 200 supplier cost leaves 800; selling markup is never debited (1.015ms)
+✔ insufficient credit blocks both issuance and debit without mutation (1.7011ms)
+✔ exact balance may be exhausted with no overdraft and money precision is enforced (1.2101ms)
+✔ supplier and currency wallets are isolated; cross-currency supplier charge is explicit (1.4891ms)
+✔ same-currency supplier charge must match frozen cost rather than sale amount (0.8533ms)
+✔ duplicate issuance and duplicated charge records are rejected (1.3476ms)
+✔ all existing issuance checks remain required before the account is charged (1.5572ms)
+✔ cancellation does not return supplier credit or refund the customer automatically (1.1259ms)
+✔ confirmed partial and full credit returns are capped by original supplier debit (1.8839ms)
+✔ return needs cancelled order, external confirmation, reason and reference (1.367ms)
+✔ ledger restore validates debit linkage, signs, duplicate ids and transaction history (1.811ms)
+✔ legacy issued orders and settlements do not invent or replay wallet debits (1.2661ms)
+✔ topups require a valid supplier and reference and reject accidental duplicate deposits (1.2471ms)
+✔ browser persistence saves ledger and records atomically; storage failure changes neither (4.5421ms)
+✔ V1 migration preserves old records and adds no fictional balance; invalid storage is not overwritten (3.9495ms)
+✔ a stale second tab cannot overwrite the first tab deposit (3.7899ms)
+ℹ tests 121
+ℹ suites 0
+ℹ pass 121
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1168.3986

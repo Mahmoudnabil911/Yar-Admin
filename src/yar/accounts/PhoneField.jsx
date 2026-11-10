@@ -1,0 +1,4 @@
+import React from 'react';
+export default function PhoneField({label,value,onChange,required=true,country='+964',onCountryChange}) {
+ return <label className="account-field"><span>{label}</span><span className="phone-input" dir="ltr"><select aria-label="Country code" value={country} onChange={e=>onCountryChange?.(e.target.value)}>{(onCountryChange?['+964','+20','+971','+966','+962','+90','+44','+1']:['+964']).map(c=><option key={c} value={c}>{c}</option>)}</select><input type="tel" inputMode="tel" autoComplete="tel" maxLength={30} placeholder="0783 140 0500" value={value || ''} onChange={onChange} required={required}/></span></label>;
+}

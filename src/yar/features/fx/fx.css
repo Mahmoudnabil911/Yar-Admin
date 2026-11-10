@@ -1,0 +1,22 @@
+.fx-chip{display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:0 11px;border:1px solid var(--border,var(--c-e3e8df));border-radius:10px;background:var(--white,var(--c-ffffff));color:var(--ink,var(--c-173323));font:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.fx-chip svg{width:16px;height:16px;color:var(--c-4e7339)}
+.fx-chip.missing{background:var(--c-fbf5e9);border-color:var(--c-ece0c7);color:var(--c-846126)}
+.fx-chip.missing svg{color:var(--c-846126)}
+.fx-chip:focus-visible{outline:2px solid var(--c-72935c);outline-offset:2px}
+.fx-panel{display:grid;gap:16px}
+.fx-status{display:flex;gap:12px;align-items:flex-start;padding:14px;border-radius:12px;border:1px solid var(--c-dce5d5);background:var(--c-f2f6ed);color:var(--c-49633a)}
+.fx-status.missing{border-color:var(--c-ece0c7);background:var(--c-fbf5e9);color:var(--c-846126)}
+.fx-status svg{width:22px;height:22px;flex:none;margin-top:2px}
+.fx-status strong{display:block;font-size:14px}
+.fx-status p{margin:4px 0 0;font-size:13px}
+.fx-history h4{display:flex;align-items:center;gap:6px;margin:0 0 8px;font-size:13px;color:var(--ink,var(--c-173323))}
+.fx-history h4 svg{width:15px;height:15px;color:var(--muted,var(--c-788270))}
+.fx-history ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.fx-history li{display:flex;align-items:baseline;gap:10px;padding:8px 10px;border:1px solid var(--border,var(--c-e3e8df));border-radius:8px;font-size:12px;color:var(--muted,var(--c-788270));overflow-wrap:anywhere}
+.fx-history .fx-rate{font-weight:600;color:var(--ink,var(--c-173323));font-size:13px;min-width:56px}
+.fx-banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border:1px solid var(--c-ece0c7);background:var(--c-fbf5e9);color:var(--c-846126);border-radius:12px;font-size:13px;line-height:1.8;margin-bottom:16px}
+.fx-banner svg{width:20px;height:20px;flex:none}
+.fx-banner p{margin:0;flex:1;min-width:200px}
+.fx-line{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 12px;border-radius:9px;border:1px solid var(--c-dce5d5);background:var(--c-f2f6ed);color:var(--c-49633a);font-size:12px}
+.fx-line.missing{border-color:var(--c-ece0c7);background:var(--c-fbf5e9);color:var(--c-846126)}
+@media (max-width:640px){.fx-chip span{display:none}.fx-chip{padding:0 9px}}

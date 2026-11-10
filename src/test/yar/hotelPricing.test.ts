@@ -1,0 +1,6 @@
+import {expect,it} from 'vitest';
+import {minimumRoomPrice} from '@/yar/services/hotelPricing';
+import {catalogFormData,addPhotoFiles} from '@/yar/services/catalogForm';
+it('displays the lowest individual room price as the hotel starting price',()=>{expect(minimumRoomPrice([{nightlyPrice:145000},{nightlyPrice:180000},{nightlyPrice:105000}])).toBe(105000);expect(minimumRoomPrice([])).toBeNull();});
+it('keeps each room price and details separate in multipart fields',()=>{const form=catalogFormData({rooms:[{name:'Double',nightlyPrice:145000},{name:'Family',nightlyPrice:180000}]});expect(form.get('rooms[0][nightlyPrice]')).toBe('145000');expect(form.get('rooms[1][nightlyPrice]')).toBe('180000');expect(form.get('rooms[1][name]')).toBe('Family');});
+it('places uploaded image bytes in a multipart File instead of a JSON body',async()=>{const record={photos:['data:image/webp;base64,UklGRg==']};const form=await addPhotoFiles(catalogFormData(record),record);const photo=form.get('photos[0]');expect(photo).toBeInstanceOf(File);expect((photo as File).type).toBe('image/webp');});

@@ -1,0 +1,285 @@
+/* YAR Admin — Full Responsive Enhancements
+   Preserves 100% of existing visual design, palette, IBM Plex Sans Arabic typography, and RTL hierarchy.
+   Fixes viewport scaling, overflow, drawers, modals, tables, and topbar across all devices from 320px to 1920px. */
+
+/* Safe global overflow containment */
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+.shell {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Sidebar Backdrop for Mobile */
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 32, 22, 0.48);
+    backdrop-filter: blur(2px);
+    z-index: 25;
+  }
+
+  .sidebar {
+    z-index: 30;
+    max-width: 85vw;
+  }
+}
+
+/* Topbar responsiveness across mobile screens */
+@media (max-width: 760px) {
+  .topbar {
+    height: 65px;
+    padding: 0 14px;
+    gap: 8px;
+  }
+
+  .breadcrumb {
+    min-width: 0;
+    gap: 8px;
+    flex-shrink: 1;
+  }
+
+  .breadcrumb strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 150px;
+    font-size: 13px;
+  }
+
+  .top-actions {
+    min-width: 0;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .global-search {
+    min-width: 0;
+    flex: 1;
+    max-width: 180px;
+  }
+
+  .global-search input {
+    width: 100%;
+    min-width: 60px;
+    max-width: 130px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .breadcrumb strong {
+    max-width: 110px;
+    font-size: 12px;
+  }
+
+  .demo-tag {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+
+  .demo-tag span {
+    width: 5px;
+    height: 5px;
+  }
+
+  .global-search input {
+    max-width: 100px;
+  }
+
+  .page-heading {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .heading-actions {
+    max-width: none;
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .heading-actions .button {
+    flex: 1 1 auto;
+    min-width: 120px;
+  }
+}
+
+@media (max-width: 360px) {
+  .demo-tag {
+    display: none;
+  }
+
+  .breadcrumb strong {
+    max-width: 90px;
+  }
+
+  .global-search input {
+    max-width: 75px;
+  }
+
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-value {
+    font-size: 26px;
+  }
+
+  .metric-value.money {
+    font-size: 22px;
+  }
+}
+
+/* Popovers: graceful positioning within mobile screens */
+@media (max-width: 760px) {
+  .popover {
+    max-width: calc(100vw - 28px);
+    box-sizing: border-box;
+    position: absolute;
+    top: calc(100% + 8px);
+    inset-inline-start: 0;
+    inset-inline-end: auto;
+  }
+
+  .add-popover, .date-popover {
+    top: calc(100% + 8px);
+    inset-inline-start: 0;
+    inset-inline-end: auto;
+  }
+
+  .notification-button + .popover {
+    inset-inline-start: auto;
+    inset-inline-end: 0;
+  }
+}
+
+/* Drawers & Modals: perfect fit on any mobile width */
+.drawer {
+  width: min(450px, 100vw);
+  max-width: 100vw;
+  box-sizing: border-box;
+}
+
+.drawer-content {
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+@media (max-width: 600px) {
+  .drawer {
+    width: 100vw;
+    max-width: 100vw;
+  }
+
+  .drawer>header {
+    padding: 16px 18px;
+  }
+
+  .drawer-content {
+    padding: 16px 18px;
+  }
+
+  .drawer h2 {
+    font-size: 20px;
+  }
+
+  /* Ensure modal & drawer forms convert 2-col to 1-col on mobile */
+  .ops-form-grid,
+  .pops-form-grid,
+  .pr-form-grid,
+  .stf-form-grid,
+  .form-stack .form-pair {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .ops-form-grid .wide,
+  .pops-field.pops-wide,
+  .pr-form-grid .wide,
+  .stf-wide {
+    grid-column: 1;
+  }
+
+  .detail-line {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+
+/* Tables horizontal scroll safeguard */
+.table-scroll,
+.ops-table-wrap,
+.catalog-table-wrap,
+.catalog-list-panel,
+.aud-trend-table,
+.pops-detail-table,
+.stf-detail-table {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+}
+
+/* Service tabs on mobile */
+@media (max-width: 600px) {
+  .service-tabs {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .service-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .service-tabs button {
+    flex-shrink: 0;
+  }
+}
+
+/* Attention bar on mobile */
+@media (max-width: 600px) {
+  .attention-bar {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .attention-bar > div:nth-child(2) {
+    flex: 1 1 200px;
+  }
+
+  .attention-bar .text-action {
+    margin-inline-start: auto;
+  }
+}
+
+/* Wide screen containment */
+@media (min-width: 1920px) {
+  main {
+    max-width: 1680px;
+    margin: 0 auto;
+  }
+}
+
+
+/* Keep the current page visible alongside fixed-size header tools. */
+.topbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px}.breadcrumb{min-width:0}.breadcrumb strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.top-actions{flex-shrink:0}.top-actions>button,.top-avatar{flex-shrink:0}
+@media(max-width:1000px){.topbar .global-search{display:none}.topbar .top-actions{gap:8px}.topbar .breadcrumb{gap:8px}}

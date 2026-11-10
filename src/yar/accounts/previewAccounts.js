@@ -1,0 +1,3 @@
+// Owner-requested local demonstration accounts, not production authentication.
+export const PREVIEW_ACCOUNTS=[{id:'yar-preview-admin',username:'admin',name:'مدير النظام',role:'admin'},{id:'yar-preview-booking',username:'booking',name:'موظف الاستقبال والحجوزات',role:'booking_employee'}];
+export const PREVIEW_CREDENTIAL={salt:'WUFSLWxvY2FsLXByZXZpZXctMjAyNg==',hash:'KhUhbTtRU5lRJeQK2uHh4bo/UkWzftTZXrgqtnykgEk='};

@@ -1,0 +1,133 @@
+{
+  "export_date": "2026-11-09",
+  "timezone": "Asia/Baghdad",
+  "source_commit": "a8a6ef8b53a08287dfd90a6b80502e72cc1edd0e",
+  "scope": "YAR admin dashboard only",
+  "asset_path_only_changes": [
+    "catalog-hotels.js",
+    "catalog-packages.js",
+    "catalog-services.js"
+  ],
+  "local_asset_allowlist_change": "dist/catalog.js",
+  "parity_fixture_asset_paths_localized": true,
+  "external_images": [
+    {
+      "source_url": "https://assets.zyrosite.com/cdn-cgi/image/format%3Dauto%2Cw%3D1920%2Ch%3D2560%2Cfit%3Dcrop/A1aKMNGg00H6KOXG/img_7670-xuVdsmdjqEzpKdgl.jpeg",
+      "local_path": "assets/external/image-01.jpeg",
+      "sha256": "a57e97d5b246ba519e20bcdd70ad9cf0545c617528437bbb05297eb44c86252b",
+      "bytes": 548253,
+      "status": "bundled"
+    },
+    {
+      "source_url": "https://aw-d.tripcdn.com/images/200113000000u00nm8027_R_960_660_R5_D.jpg",
+      "local_path": "assets/external/image-02.jpg",
+      "sha256": "be3eecf9e3de5ddcea8aa24082dc9aedc49c245a43ce64841c899438838cbf8e",
+      "bytes": 54916,
+      "status": "bundled"
+    },
+    {
+      "source_url": "https://cf.bstatic.com/xdata/images/hotel/max1024x768/574583894.jpg?k=ecc6a5a7979fcc77fb22686e25b9f0a57a8b9636b662a7deff2887b0c4674e9e&o=",
+      "local_path": "assets/external/image-03.jpg",
+      "sha256": "69eacc968f6caadcb157ea0d76a13779f0a8d03c98a743b8b57eb9d393ecc5de",
+      "bytes": 97001,
+      "status": "bundled"
+    },
+    {
+      "source_url": "https://dynamic-media-cdn.tripadvisor.com/media/photo-o/2f/aa/c6/e8/toyota-hiace-2024-low.jpg?h=900&s=1&w=1200",
+      "local_path": "assets/external/image-04.jpg",
+      "sha256": "24ffabd5713a311dd5e1dde26703961d80490bce6d71a745bab545fab3047e5d",
+      "bytes": 302859,
+      "status": "bundled"
+    },
+    {
+      "source_url": "https://fleet-img.cdn.onlinefleet.io/1599633865car.jpg",
+      "local_path": "assets/external/image-05.jpg",
+      "sha256": "80fa409bcbd6f4c8bfcbdcc877cd7451bdd3f406e2dda1128f7f32c8d3eaa2c0",
+      "bytes": 64868,
+      "status": "bundled"
+    },
+    {
+      "source_url": "https://pix10.agoda.net/hotelImages/100109/3341743/52715d784adf405602337b9bf0262fc6.jpg?ca=20&ce=0&s=1024x768",
+      "local_path": "assets/external/image-06.jpg",
+      "sha256": "c4dfd83fa44a6b61754a4cc0f5c103c7d629d1f204218365c129cc857cd76fea",
+      "bytes": 86609,
+      "status": "bundled"
+    },
+    {
+      "source_url": "https://www.saadatrent.com/storage/car/toyota-camry-2024/NEW-UPDATE/toyota-camry-2024-dubai-slide-1.webp",
+      "local_path": "assets/external/image-07.webp",
+      "sha256": "70fd1345c9a77da4a33d775723be6a8c56270e675107241c772abe6533b031c1",
+      "bytes": 349352,
+      "status": "bundled"
+    },
+    {
+      "source_url": "https://www.saadatrent.com/storage/car/toyota-fortuner/new-update/fourtuner-dubai-slide-2.webp",
+      "local_path": "assets/external/image-08.webp",
+      "sha256": "782684ea361a8a040405e32f51877b9c101c3334ae44f4c8e6114b2ca865915a",
+      "bytes": 180248,
+      "status": "bundled"
+    },
+    {
+      "source_url": "https://www.saadatrent.com/storage/car/toyota-fortuner/new-update/fourtuner-dubai-slide-3.webp",
+      "local_path": "assets/external/image-09.webp",
+      "sha256": "8ea7a785381307462f30e2b2128eaee2989bcf236e611c245101979767894a74",
+      "bytes": 198750,
+      "status": "bundled"
+    }
+  ],
+  "original_source_sha256": {
+    "dist/app.js": "e24b10dba158b96c164d140be46f42a2ff2b3e4772820ddfceeee95b4704328b",
+    "dist/audience-data.js": "0af1df9e1c6651dd1f13867b837f3cc43ce2ec07727d3b1c08cdc1be26e7c5f8",
+    "dist/audience.css": "86ddd378beff127119e1e2f5dc758e7ee1de13656fdc6ed19583a70ca39de5d5",
+    "dist/audience.js": "6b02dc93d2901e95274971d6e08f44b4581f1aa5cb3fff9e626983732ca83519",
+    "dist/behavior-data.js": "f4a0366dc4626bc19e5441dd6ac6eeb492e5f201a4e407ee36fccd5813a5e5cc",
+    "dist/behavior.css": "9ac2d3a5326342630984beeb58f55246a1a3ff37efddfe2f176e7d42511a753d",
+    "dist/behavior.js": "60df8a062de9a87b741caa113d7bbaedb8e75592ccbb667364dec699d18a0bf3",
+    "dist/catalog-hotels.js": "42472c5fd2316c4e31b19fc2523783505631e0edd5e6a507a202a452791f5238",
+    "dist/catalog-packages.js": "0ce5bbfab9c09e3a695eb8b6247cebe4216c885d13c0af5ab5fa6648edc4c0c5",
+    "dist/catalog-services.js": "945d105fff1cec7b7a99a9050fbb63b275984789f548475a5b3bcfe972eb2de8",
+    "dist/catalog-tours.js": "3945da17f3a533a113a62e183e2524f39f2db12c0245848bf3b242fb69fa8129",
+    "dist/catalog.js": "f1ea35559cd368b7266c5d2fe2401441daf1ba58b6e8be67911bd221f98f275e",
+    "dist/content-model.js": "bec6893ef9f7e753cea57418d4b2e56c16f5bff3e3a7298500ab06201f50a97a",
+    "dist/content.css": "b6b27299510295bf9c28c6817b06c987c01e136122cf58887971e7fa9f5985e1",
+    "dist/content.js": "4d647e44fa8eb560d771090db30cbca74c5e944663e47cd48741632b04b474a5",
+    "dist/final-demo.js": "b0d9c99b8d954d639126e94a0817cfb10a17163f39bb31c66e0df98addb665d5",
+    "dist/gateways-model.js": "5c9608a8c3d3fd5c044334075755bc2f0360fa613bb5c349f5a0ce1ab8186123",
+    "dist/gateways.css": "c306713f0f12c69d4fb0189296a343275e6904f934d1675772b31361c896e555",
+    "dist/gateways.js": "1b0dd8eb21b4313fc4d048734a074d90e75c9459b87e2657edfd09aec0146ecd",
+    "dist/icons.js": "c730a0040dfe07754366f67a79c20a46db0920bb90284ad5744a2330626d450c",
+    "dist/index.html": "454caa67006f07ec42530064b3786d714310e195dab284d60a8312ca3bb0c13e",
+    "dist/integration.css": "7203a8103ec3d3d3492a7a2528b06394088ca16e44bf523b79f0a716c0ab4766",
+    "dist/mock-data.js": "c77d36ebd59cde799bc7a7126258f2285acc0391e0ae9d3df8f4987261b4583b",
+    "dist/operations-model.js": "2df599b3254f523b24da633473c27f223047c3de92b9acbfc06aa5ea6eb39189",
+    "dist/operations.css": "2b8bb4b98b221e63a27eadc3cf593c2f3a558921c08babf5596677644afa430e",
+    "dist/operations.js": "cfd83d58fa3e3eb51613dee46afacf659a54304cd037782d680782181a8c36d5",
+    "dist/pricing-engine.js": "33e188810758cea56ea1fe06e57883714ed675e593829d2aa2cc250e57523614",
+    "dist/pricing.css": "58a6a7f0edbce0c8d9a7734c63c51b81d194bce015fc97fd9e54a14944ae2b81",
+    "dist/pricing.js": "1c82e7c785a5a3eb4daf29219dcb5101357709b8bb98c1f466ddefa5d50e010f",
+    "dist/provider-ops.css": "b6fcfb202a20934955cba95982f7a6894b3c7f997a82ae82d01491815a22dd4e",
+    "dist/provider-ops.js": "605f2a5c81b84c43b4cc074bb21a3e6c89b9607cafb256ff6915c19a603ca46c",
+    "dist/readability.css": "2767c19334ad19015f3ecd0780ca8938c18bf64b4f66bf20696b8b173c0d8d0b",
+    "dist/staff-model.js": "3b1e91ebf339fda4c96969541bb34cd947b684e09fbeaa45cced59eeb5b40eb7",
+    "dist/staff.css": "6dc04dadc36a4e4df02877d38eabaa280969e6336eb47e510e28e1ec311784c4",
+    "dist/staff.js": "e30a41cb3e4f339e35fd784d5409893244574a6b5adcebe986f1b80ce54a0826",
+    "dist/styles.css": "7cf9b4a4628c2fb4344b69cae1f4663e6d4f83f98932b7e44de483d587ce2341",
+    "dist/supplier-credit-model.js": "23cf5d14a080a9184822f967fd4faf93206a0d2b945ce9e2b9a9e4f25dd28ef9",
+    "dist/supplier-credit.css": "4a1714a919d5c69783bb0b58dde3a28819e0c39a5ac0b8eeb698b50972d94fc1",
+    "dist/supplier-credit.js": "01c733043928ede1836e10ef98bd590fa86a4d3e286960c6c2426f40432cd874",
+    "dist/assets/ibm-400.ttf": "02609c5ef845ef511676c8badb24d1fc8b4aed3dc3b9d8bbdab22c14431b7c16",
+    "dist/assets/ibm-500.ttf": "1fe214ca7ff822ff8b73e5bb9584414bfc6c845e7ddab41f24ac4fce8e55a860",
+    "dist/assets/ibm-600.ttf": "9e8b030f3326946e481c874a2f751c1321cb0708cba81b79e6c3f9ffacc931df",
+    "dist/assets/ibm-700.ttf": "05616a64c5dca137a327b30b1fe7f4fcd1e16892a332e1665b49d52038858044",
+    "dist/assets/OFL.txt": "7e6b2818edbd8f6a01ae80641cc8f16a51080d08fb4e532be3a0b6f74adb07da",
+    "dist/assets/PHOSPHOR-LICENSE.txt": "ddbe6082ec3cf979db47e5af549d2849c5d6182b3e005ef91ce1dbb9eb122f11",
+    "dist/assets/yar-logo.svg": "0d7ae07c1c4ce34d64d44b8b49b9fc61e8e0651e567d8a07ad84ef75d5272e71",
+    "dist/assets/content/mashhad.jpg": "628da9c80571aeba41db37159874c00813f083ee4b2f8f1646a6d65c3bc3388f",
+    "dist/assets/content/masuleh.jpg": "03e546ba494ff290cc58a8672f734061e30acf4357b42647610e21ce135831df",
+    "dist/assets/content/north.jpg": "6391b988838ec9bfb0472da0041078e329a5181959987da7e4bcba0aaceae95d",
+    "dist/assets/content/shiraz.jpg": "b177b4d4dc013609da8fa63525b489626fb1225ee56566381502240420ce6c25",
+    "dist/assets/content/tehran-airplane-window-v2.png": "f2ff0b5d33cb61c52d1b439753d4063aea353258fd58742b15d36fe8feff3362",
+    "dist/assets/content/tehran.jpg": "662e25b6d4d91352822eb1043042467faf63eb77bf617b9c201662315ec72aff"
+  },
+  "browser_local_storage_exported": false
+}

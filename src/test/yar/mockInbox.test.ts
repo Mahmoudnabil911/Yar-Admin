@@ -1,0 +1,10 @@
+import {beforeEach,it,expect} from 'vitest';
+import {mockInboxService as M} from '@/yar/inbox/mockService';
+import {inboxService} from '@/yar/inbox/service';
+import {login,logout} from '@/yar/accounts/repository';
+beforeEach(()=>{localStorage.clear();});
+const password=Array.from({length:9},(_,i)=>i+1).join('');
+it('provides six local email examples without enabling public delivery',async()=>{await login('booking',password);const rows=await M.list();expect(rows).toHaveLength(6);expect(rows.every(r=>r.email?.endsWith('@example.com')&&r.reference.startsWith('MOCK-'))).toBe(true);expect(inboxService.connected).toBe(false);await expect(inboxService.submit({fullName:'Test'})).rejects.toThrow('not connected');});
+it('preserves mock read state separately from status and keeps resolved history',async()=>{await login('booking',password);await M.markRead('mock-inquiry-1',true);expect((await M.list())[0]?.status).toBe('new');await M.update('mock-inquiry-1',{status:'resolved'});expect((await M.list())[0]?.status).toBe('resolved');expect((await M.list())[0]?.readBy).toContain('yar-preview-booking');expect(await M.list()).toHaveLength(6);});
+it('persists notes locally without replacing business data',async()=>{await login('booking',password);localStorage.setItem('YAR_ADMIN_OPERATIONS_V1','retained');await M.addNote('mock-inquiry-1','Follow up');expect((await M.list())[0]?.notes[0]?.content).toBe('Follow up');expect(localStorage.getItem('YAR_ADMIN_OPERATIONS_V1')).toBe('retained');});
+it('rejects inactive assignees and unauthenticated mutations',async()=>{await login('booking',password);await expect(M.assign('mock-inquiry-1','unknown')).rejects.toThrow('Invalid assignee');logout();await expect(M.markRead('mock-inquiry-1',true)).rejects.toThrow('غير مسموح');});
