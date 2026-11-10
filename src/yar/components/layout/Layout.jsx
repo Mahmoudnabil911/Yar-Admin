@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import DatePickerBridge from '../ui/DatePickerBridge';
+import SelectBridge from '../ui/SelectBridge';
 import { FxRateBanner } from '../../features/fx/ExchangeRate';
 
 export function Layout({
@@ -31,6 +32,7 @@ export function Layout({
   return (
     <>
       <DatePickerBridge />
+      <SelectBridge />
       <a className="skip" href="#main">انتقل إلى المحتوى</a>
       {isMobileMenuOpen && <div className="sidebar-backdrop" onClick={onCloseMobileMenu} aria-hidden="true" />}
       <Sidebar

@@ -1,0 +1,138 @@
+/* ================================================================
+   Custom Select Chevron Arrow & Dropdown Bridge Styling
+   ================================================================ */
+
+/* Custom styled select with single clean chevron icon */
+select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-repeat: no-repeat !important;
+  background-size: 16px 16px !important;
+  background-position: left 12px center !important;
+  /* Light mode: single clean arrow pointing DOWN */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2318352c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  padding-inline-start: 36px !important;
+  cursor: pointer;
+}
+
+[dir="ltr"] select,
+html[dir="ltr"] select {
+  background-position: right 12px center !important;
+  padding-inline-start: 12px !important;
+  padding-inline-end: 36px !important;
+}
+
+/* When the select dropdown is open, flip arrow to point UP (Gold) */
+select[data-yar-open="true"],
+select.yar-select-open {
+  background-repeat: no-repeat !important;
+  background-size: 16px 16px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23ba9450' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m18 15-6-6-6 6'/%3E%3C/svg%3E") !important;
+}
+
+/* Dark mode: single cream arrow pointing DOWN */
+html.dark select,
+.dark select {
+  background-repeat: no-repeat !important;
+  background-size: 16px 16px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23efe4d2' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+}
+
+/* Dark mode when open: arrow pointing UP (Gold) */
+html.dark select[data-yar-open="true"],
+html.dark select.yar-select-open,
+.dark select[data-yar-open="true"],
+.dark select.yar-select-open {
+  background-repeat: no-repeat !important;
+  background-size: 16px 16px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23ba9450' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m18 15-6-6-6 6'/%3E%3C/svg%3E") !important;
+}
+
+/* Dropdown Popup Panel */
+.yar-select-portal {
+  position: fixed;
+  z-index: 1000;
+  box-sizing: border-box;
+  background-color: var(--white, #ffffff);
+  color: var(--ink, #18352c);
+  border: 1px solid var(--border, #e6eae3);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(15, 38, 32, 0.15);
+  overflow-y: auto;
+  max-height: 280px;
+  font-family: inherit;
+  padding: 4px;
+}
+
+.dark .yar-select-portal,
+html.dark .yar-select-portal {
+  background-color: #17251f;
+  color: #efe4d2;
+  border-color: #284438;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.yar-select-group-label {
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted, #7c8981);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dark .yar-select-group-label,
+html.dark .yar-select-group-label {
+  color: #92ad79;
+}
+
+.yar-select-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.12s ease, color 0.12s ease;
+  box-sizing: border-box;
+  color: inherit;
+}
+
+.yar-select-item:hover,
+.yar-select-item.is-highlighted {
+  background-color: var(--c-eef4e7, #eef4e7);
+  color: var(--green, #0f2620);
+}
+
+.dark .yar-select-item:hover,
+.dark .yar-select-item.is-highlighted,
+html.dark .yar-select-item:hover,
+html.dark .yar-select-item.is-highlighted {
+  background-color: #233a30;
+  color: #ba9450;
+}
+
+.yar-select-item.is-selected {
+  background-color: var(--green, #0f2620);
+  color: var(--cream, #efe4d2);
+  font-weight: 600;
+}
+
+.dark .yar-select-item.is-selected,
+html.dark .yar-select-item.is-selected {
+  background-color: var(--gold, #ba9450);
+  color: #0f2620;
+  font-weight: 600;
+}
+
+.yar-select-item svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-inline-start: 8px;
+}

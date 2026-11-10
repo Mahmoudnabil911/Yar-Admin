@@ -218,3 +218,147 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .parto-status dd { margin: 0; font-weight: 600; font-size: 13px; }
 .parto-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .parto-log { margin: 0; padding-inline-start: 18px; font-size: 12px; color: var(--muted); }
+/* ================================================================
+   Unified Select & Dropdown styling (Light & Dark mode)
+   Matches YAR Brand: Forest, Cream, Gold, Paper & Ink tokens
+   ================================================================ */
+
+select {
+  color-scheme: light;
+  background-color: var(--white, #ffffff);
+  color: var(--ink, #18352c);
+  border: 1px solid var(--border, #e6eae3);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+}
+
+select:focus,
+select:focus-visible {
+  outline: none;
+  border-color: var(--gold, #ba9450) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold, #ba9450) 25%, transparent) !important;
+}
+
+select option,
+select optgroup {
+  background-color: var(--white, #ffffff);
+  color: var(--ink, #18352c);
+  padding: 8px 10px;
+}
+
+select option:checked,
+select option:hover {
+  background-color: var(--c-eef4e7, #eef4e7);
+  color: var(--green, #0f2620);
+}
+
+/* Dark mode for selects and options */
+html.dark select,
+.dark select {
+  color-scheme: dark;
+  background-color: #17251f !important;
+  color: #efe4d2 !important;
+  border-color: #284438 !important;
+}
+
+html.dark select:focus,
+html.dark select:focus-visible,
+.dark select:focus,
+.dark select:focus-visible {
+  border-color: var(--gold, #ba9450) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold, #ba9450) 35%, transparent) !important;
+}
+
+html.dark select option,
+html.dark select optgroup,
+.dark select option,
+.dark select optgroup {
+  background-color: #17251f !important;
+  color: #efe4d2 !important;
+}
+
+html.dark select option:checked,
+html.dark select option:hover,
+.dark select option:checked,
+.dark select option:hover {
+  background-color: #233a30 !important;
+  color: #ba9450 !important;
+}
+
+/* Radix UI & Custom Popover / Dropdown lists */
+[role="listbox"],
+[role="menu"],
+[data-radix-popper-content-wrapper] [role="menu"],
+[data-radix-select-content] {
+  background-color: var(--white, #ffffff) !important;
+  color: var(--ink, #18352c) !important;
+  border: 1px solid var(--border, #e6eae3) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 28px rgba(15, 38, 32, 0.12) !important;
+}
+
+[role="option"],
+[role="menuitem"] {
+  color: var(--ink, #18352c) !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+}
+
+[role="option"]:hover,
+[role="option"][data-highlighted],
+[role="menuitem"]:hover,
+[role="menuitem"][data-highlighted] {
+  background-color: var(--c-eef4e7, #eef4e7) !important;
+  color: var(--green, #0f2620) !important;
+}
+
+[role="option"][aria-selected="true"],
+[role="option"][data-state="checked"] {
+  background-color: var(--green, #0f2620) !important;
+  color: var(--cream, #efe4d2) !important;
+}
+
+html.dark [role="listbox"],
+html.dark [role="menu"],
+html.dark [data-radix-popper-content-wrapper] [role="menu"],
+html.dark [data-radix-select-content],
+.dark [role="listbox"],
+.dark [role="menu"],
+.dark [data-radix-popper-content-wrapper] [role="menu"],
+.dark [data-radix-select-content] {
+  background-color: #17251f !important;
+  color: #efe4d2 !important;
+  border-color: #284438 !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45) !important;
+}
+
+html.dark [role="option"],
+html.dark [role="menuitem"],
+.dark [role="option"],
+.dark [role="menuitem"] {
+  color: #efe4d2 !important;
+}
+
+html.dark [role="option"]:hover,
+html.dark [role="option"][data-highlighted],
+html.dark [role="menuitem"]:hover,
+html.dark [role="menuitem"][data-highlighted],
+.dark [role="option"]:hover,
+.dark [role="option"][data-highlighted],
+.dark [role="menuitem"]:hover,
+.dark [role="menuitem"][data-highlighted] {
+  background-color: #233a30 !important;
+  color: #ba9450 !important;
+}
+
+html.dark [role="option"][aria-selected="true"],
+html.dark [role="option"][data-state="checked"],
+.dark [role="option"][aria-selected="true"],
+.dark [role="option"][data-state="checked"] {
+  background-color: #ba9450 !important;
+  color: #0f2620 !important;
+}
