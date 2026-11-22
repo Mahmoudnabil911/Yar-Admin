@@ -79,11 +79,19 @@ export default {
 
         const res = await fetch(proxyReq);
         const resHeaders = new Headers(res.headers);
+        // Runtime fetch() automatically decodes upstream gzip/brotli.
+        // We MUST strip content-encoding and content-length so Vercel / browser
+        // never throws net::ERR_CONTENT_DECODING_FAILED.
+        resHeaders.delete("content-encoding");
+        resHeaders.delete("content-length");
+        resHeaders.delete("transfer-encoding");
         resHeaders.set("access-control-allow-origin", "*");
         resHeaders.set("access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
         resHeaders.set("access-control-allow-headers", "Content-Type, Authorization, X-Requested-With");
 
-        return new Response(res.body, {
+        const responseBuffer = await res.arrayBuffer();
+
+        return new Response(responseBuffer, {
           status: res.status,
           statusText: res.statusText,
           headers: resHeaders,
