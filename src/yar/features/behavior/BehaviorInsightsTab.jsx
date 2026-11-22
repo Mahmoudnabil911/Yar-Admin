@@ -392,7 +392,7 @@ export default function BehaviorInsightsTab({ filters = {} }) {
           <strong>
             <bdi>{percent(summary.zeroRate)}</bdi>
           </strong>
-          <p>{count(summary.zeroSearches)} محاولة عادت بصفر عروض</p>
+          <p>{`${count(summary.zeroSearches)} محاولة عادت بصفر عروض`}</p>
         </article>
 
         <article className="bh-metric">
@@ -403,7 +403,7 @@ export default function BehaviorInsightsTab({ filters = {} }) {
           <strong>
             <bdi>{percent(summary.conversion)}</bdi>
           </strong>
-          <p>{count(summary.confirmed)} حجزًا مؤكدًا مرتبطًا بجلسات البحث</p>
+          <p>{`${count(summary.confirmed)} حجزًا مؤكدًا مرتبطًا بجلسات البحث`}</p>
         </article>
       </div>
 
@@ -452,7 +452,7 @@ export default function BehaviorInsightsTab({ filters = {} }) {
                     <p>{def.description}</p>
                   </div>
                   <span className="bh-row-count">
-                    <bdi>{count(rows.length)}</bdi> بند
+                    {`${count(rows.length)} بند`}
                   </span>
                 </div>
 

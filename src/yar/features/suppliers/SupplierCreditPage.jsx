@@ -174,7 +174,7 @@ export function SupplierCreditPage({ onNavigate, onOpenBooking, searchQuery = ''
       </div>
 
       <p className="ops-notice">
-        أرصدة المورّدين منفصلة عن تحصيل الزبائن، ولا تُجمع العملات.
+        هذه السجلات والحركات محلية تجريبية للمعاينة، ولا تمثل معاملات مالية فعلية. أرصدة المورّدين منفصلة عن تحصيل العملاء، ولا تُجمع العملات.
       </p>
 
       {/* Currency Balances Grid */}

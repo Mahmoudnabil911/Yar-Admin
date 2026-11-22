@@ -15,6 +15,18 @@ for (const [ar, en] of Object.entries(EN)) {
     patterns.push([new RegExp(`^${esc}$`), en]);
   } else exact.set(norm(ar), en);
 }
+// JSX frequently places a dynamic value in the same text node as its Arabic label
+// (for example, "آخر نشاط: {date}"). Exact-only lookup misses the entire node.
+// Keep a longest-first list of complete multiword labels so those labels can be
+// translated in mixed text without translating arbitrary short substrings.
+const partial = [...exact.entries()]
+  .filter(([ar]) => (ar.length >= 7 && /\s/.test(ar)) || (ar.length >= 3 && /[^\u0600-\u06FF\s]/.test(ar)))
+  .sort(([a], [b]) => b.length - a.length)
+  .map(([ar, en]) => {
+    const source = ar.split(' ').map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
+    return [new RegExp(`(?<![\\u0600-\\u06FF])${source}(?![\\u0600-\\u06FF])`, 'g'), en];
+  });
+const partialPatterns = patterns.map(([re, en]) => [new RegExp(re.source.replace(/^\^|\$$/g, ''), 'g'), en]);
 const AR = /[\u0600-\u06FF]/;
 
 export function translateString(value) {
@@ -50,7 +62,15 @@ export function translateString(value) {
       return lead + res + trail;
     }
   }
-  return null;
+  let result = value;
+  for (const [re, en] of partial) result = result.replace(re, en);
+  for (const [re, en] of partialPatterns) {
+    result = result.replace(re, (...args) => {
+      const captures = args.slice(1, -2);
+      return captures.reduce((text, arg, i) => text.replace(new RegExp(`\\{${i}\\}`, 'g'), exact.get(norm(arg)) ?? arg), en);
+    });
+  }
+  return result === value ? null : result;
 }
 
 /** Programmatic helper for strings we render ourselves (toasts, errors). */

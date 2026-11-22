@@ -4,6 +4,8 @@ import { fxStorage } from '../../services/storage/fxStorage';
 import { can } from '../../auth/access';
 import { useWords } from '../../accounts/AccountUI';
 import { Drawer } from '../../components/ui/Drawer';
+import { usePrefs } from '../../i18n/prefs';
+import { tr } from '../../i18n/translator';
 import './fx.css';
 
 let tick = 0;
@@ -30,6 +32,7 @@ const fmt = n => Number(n).toLocaleString('en-US');
 
 export function FxRateForm({ onSaved }) {
   const t = useWords();
+  const { lang } = usePrefs();
   const { rate, latest } = useFxRate();
   const [value, setValue] = useState(() => String(rate?.rate || latest?.rate || ''));
   const [note, setNote] = useState('');
@@ -41,7 +44,7 @@ export function FxRateForm({ onSaved }) {
     e.preventDefault();
     setError('');
     try { fxStorage.setTodayRate(value, note); setNote(''); onSaved?.(); }
-    catch (err) { setError(err.message); }
+    catch (err) { setError(tr(err.message, lang)); }
   }
 
   return (

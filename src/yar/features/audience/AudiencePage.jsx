@@ -365,7 +365,7 @@ export default function AudiencePage({ onOpenBooking }) {
         )}
 
         <p className="aud-period-note">
-          الفترة المطبقة: {startDate} ← {endDate} · {platforms[platform]} · توقيت بغداد
+          <span>الفترة المطبقة:</span> {startDate} ← {endDate} · {platforms[platform]} · <span>توقيت بغداد</span>
         </p>
       </form>
 
@@ -550,7 +550,7 @@ export default function AudiencePage({ onOpenBooking }) {
             {usersList.length > 0 && (
               <div className="aud-pagination">
                 <span>
-                  عرض {(userPage - 1) * 8 + 1}–{Math.min(userPage * 8, usersList.length)} من {usersList.length} مستخدمًا
+                  {`عرض ${(userPage - 1) * 8 + 1}–${Math.min(userPage * 8, usersList.length)} من ${usersList.length} مستخدمًا`}
                 </span>
                 <div>
                   <button
@@ -695,8 +695,8 @@ export default function AudiencePage({ onOpenBooking }) {
             </div>
 
             <div className="aud-cohort-note">
-              إجمالي جلسات الفترة: <bdi>{num(report.sessions)}</bdi> = <bdi>{num(report.anonymousSessions)}</bdi> جلسة
-              مجهولة + <bdi>{num(report.identifiedSessions)}</bdi> جلسة بحساب مسجل.
+              <span>إجمالي جلسات الفترة:</span> <bdi>{num(report.sessions)}</bdi> = <bdi>{num(report.anonymousSessions)}</bdi>{' '}
+              <span>جلسة مجهولة</span> + <bdi>{num(report.identifiedSessions)}</bdi> <span>جلسة بحساب مسجل.</span>
             </div>
           </div>
         )}
