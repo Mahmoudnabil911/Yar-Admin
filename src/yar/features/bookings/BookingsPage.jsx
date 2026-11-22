@@ -47,8 +47,12 @@ export function BookingsPage({
       if (res && Array.isArray(res.items)) {
         const mapped = res.items.map(bookingsApi.mapRecordToRow);
         setBackendItems(mapped);
+        operationsStorage.records = mapped;
+        operationsStorage.notify();
       } else {
         setBackendItems([]);
+        operationsStorage.records = [];
+        operationsStorage.notify();
       }
     } catch (err) {
       console.warn('Backend bookings fetch:', err);

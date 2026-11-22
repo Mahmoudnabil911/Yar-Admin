@@ -6,7 +6,7 @@ import { catalogStorage } from './catalogStorage';
 import { fxStorage } from './fxStorage';
 import { usdToIqd } from '../fxRate';
 import { bookingsApi } from '../api/bookingsApi';
-import { getAccessToken } from '../api/authApi';
+import { getAccessToken, isAuthenticated } from '../api/authApi';
 
 const STORAGE = 'YAR_ADMIN_OPERATIONS_V1';
 const clone = v => JSON.parse(JSON.stringify(v));
@@ -36,6 +36,11 @@ class OperationsStorage {
 
   ensure() {
     if (this.records) return;
+    if (isAuthenticated()) {
+      this.records = [];
+      this.ledger = [];
+      return;
+    }
     let raw;
     const context = this.getContext();
     try {
@@ -286,21 +291,14 @@ class OperationsStorage {
     return M.csv(rows);
   }
 
-  async syncFromBackend() {
+  async syncFromBackend(force = false) {
+    if (!isAuthenticated()) return null;
     try {
-      const res = await bookingsApi.listBookings({ limit: 100 });
+      const res = await bookingsApi.listBookings({ limit: 100 }, force);
       if (res && Array.isArray(res.items)) {
         this.ensure();
         const mapped = res.items.map(r => bookingsApi.mapRecordToRow(r));
-        if (getAccessToken()) {
-          this.records = mapped;
-        } else if (mapped.length > 0) {
-          const map = new Map(this.records.map(r => [r.id, r]));
-          for (const item of mapped) {
-            map.set(item.id, { ...(map.get(item.id) || {}), ...item });
-          }
-          this.records = Array.from(map.values());
-        }
+        this.records = mapped;
         this.notify();
       }
       return res;
