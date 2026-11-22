@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { COUNTRIES, findCountry, filterCountries } from '@/yar/accounts/countries';
+import { formatInternationalPhone } from '@/yar/auth/LoginScreen';
 
 describe('Country code and flag registry', () => {
   it('places Iraq (+964) as the first and primary priority', () => {
@@ -74,6 +75,17 @@ describe('Country code and flag registry', () => {
     expect(filterCountries('972')).toHaveLength(0);
     expect(filterCountries('+972')).toHaveLength(0);
     expect(filterCountries('IL')).toHaveLength(0);
+  });
+
+  describe('formatInternationalPhone', () => {
+    it('formats phone numbers into standard E.164 without spaces or leading zero', () => {
+      expect(formatInternationalPhone('+20', '1027197422')).toBe('+201027197422');
+      expect(formatInternationalPhone('+20', '01027197422')).toBe('+201027197422');
+      expect(formatInternationalPhone('+20', '010 2719 7422')).toBe('+201027197422');
+      expect(formatInternationalPhone('+964', '0783 140 0500')).toBe('+9647831400500');
+      expect(formatInternationalPhone('+964', '+9647831400500')).toBe('+9647831400500');
+      expect(formatInternationalPhone('+20', '+20 1027197422')).toBe('+201027197422');
+    });
   });
 });
 

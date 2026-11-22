@@ -17,6 +17,25 @@ export default defineConfig({
           target: 'https://yar-odoo.samaalrosha.com',
           changeOrigin: true,
           secure: false,
+          configure: (proxy) => {
+            proxy.on('error', (err, _req, res) => {
+              // Gracefully handle upstream drops/timeouts without crashing
+              if (res && !res.headersSent && typeof res.writeHead === 'function') {
+                res.writeHead(502, { 'Content-Type': 'application/json' });
+                res.end(
+                  JSON.stringify({
+                    success: false,
+                    data: null,
+                    message: {
+                      ar: 'تعذر الاتصال بالخادم حالياً، يرجى المحاولة بعد دقيقة.',
+                      en: 'Connection issue or rate limited; please try again in a moment.',
+                    },
+                    error: { code: 'bad_gateway' },
+                  })
+                );
+              }
+            });
+          },
         },
       },
     },

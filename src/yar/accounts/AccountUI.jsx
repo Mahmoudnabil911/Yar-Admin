@@ -30,6 +30,24 @@ const errors={
 };
 export function errorText(error,lang){
  if(!error)return '';
+ if (error.code === 'conflict' || error.message === 'Operation conflict' || error.en === 'Operation conflict') {
+  return lang === 'ar' ? 'رقم الهاتف أو الحساب مسجل بالفعل مسبقاً.' : 'This phone number or account is already registered.';
+ }
+ if (error.code === 'invalid_request') {
+  return lang === 'ar' ? 'الطلب غير صحيح. يجب أن تتكون كلمة المرور من 12 خانة على الأقل وتحتوي على أحرف وأرقام.' : 'Invalid request. Password must be at least 12 characters and include letters and numbers.';
+ }
+ if (error.code === 'rate_limited') {
+  return lang === 'ar' ? 'طلبات كثيرة، يرجى الانتظار دقيقة والمحاولة لاحقاً.' : 'Too many attempts; please wait a minute and try again.';
+ }
+ if (error.code === 'otp_delivery_failed') {
+  return lang === 'ar' ? 'تعذر إرسال رمز التحقق عبر واتساب حالياً، يرجى التأكد من أن الرقم مسجل على واتساب والمحاولة لاحقاً.' : 'WhatsApp verification code could not be sent; please make sure this number is on WhatsApp and try again later.';
+ }
+ if (error.code === 'invalid_mobile') {
+  return lang === 'ar' ? 'رقم الهاتف غير صحيح، يرجى التأكد من الرمز الدولي ورقم الهاتف.' : 'Invalid mobile number; please check the number and country code.';
+ }
+ if (error.code === 'bad_gateway') {
+  return lang === 'ar' ? 'تعذر الاتصال بالخادم حالياً، يرجى المحاولة بعد قليل.' : 'Could not reach server; please try again shortly.';
+ }
  if(lang==='ar'){
   if(error.ar)return error.ar;
   return errors[error.message]?.[0]||error.message||'تعذر تنفيذ الإجراء. يرجى مراجعة البيانات والمحاولة مجددًا.';

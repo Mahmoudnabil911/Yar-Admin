@@ -10,6 +10,16 @@ import PhoneField from '../accounts/PhoneField';
 import { iraqiPhone } from '../accounts/phone';
 import { authApi } from '../services/api/authApi';
 
+export function formatInternationalPhone(countryCode, input) {
+  const trimmed = (input || '').trim();
+  if (trimmed.startsWith('+')) {
+    return trimmed.replace(/[\s-]/g, '');
+  }
+  const cleaned = trimmed.replace(/[\s-]/g, '').replace(/^0+/, '');
+  const dial = (countryCode || '').trim().replace(/[\s-]/g, '');
+  return `${dial}${cleaned}`;
+}
+
 export default function LoginScreen({ initialMode }) {
   const t = useWords(), { lang } = usePrefs();
 
@@ -88,8 +98,8 @@ export default function LoginScreen({ initialMode }) {
     setError('');
     setStatusMsg('');
 
-    if (password.length < 8) {
-      setError(t('يجب أن تتكون كلمة المرور من 8 خانات على الأقل.', 'Password must be at least 8 characters.'));
+    if (password.length < 12 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+      setError(t('يجب أن تتكون كلمة المرور من 12 خانة على الأقل، وتحتوي على أحرف وأرقام.', 'Password must be at least 12 characters and include letters and numbers.'));
       return;
     }
     if (password !== confirmPassword) {
@@ -99,14 +109,14 @@ export default function LoginScreen({ initialMode }) {
 
     setBusy(true);
     try {
-      const rawPhone = identifier.trim();
-      const formattedPhone = rawPhone.startsWith('+') ? rawPhone : `${countryCode} ${rawPhone}`;
+      const formattedPhone = formatInternationalPhone(countryCode, identifier);
       await authApi.register({
         name: name.trim(),
         phone: formattedPhone,
         password,
         email: email.trim() || undefined,
       });
+      setIdentifier(formattedPhone);
       setStatusMsg(t('تم إرسال رمز التحقق إلى واتساب بنجاح.', 'Verification code sent to WhatsApp successfully.'));
       setMode('verify_otp');
     } catch (err) {
@@ -122,10 +132,11 @@ export default function LoginScreen({ initialMode }) {
     setStatusMsg('');
     setBusy(true);
     try {
-      await authApi.verifyOtp(identifier.trim(), otpCode.trim());
+      const formattedPhone = formatInternationalPhone(countryCode, identifier);
+      await authApi.verifyOtp(formattedPhone, otpCode.trim());
       setStatusMsg(t('تم تفعيل الحساب بنجاح! جاري تسجيل الدخول...', 'Account activated successfully! Signing in...'));
       try {
-        await auth.signIn(identifier, password);
+        await auth.signIn(formattedPhone, password);
         window.location.assign('/dashboard');
       } catch {
         setMode('login');
@@ -142,7 +153,8 @@ export default function LoginScreen({ initialMode }) {
     setError('');
     setBusy(true);
     try {
-      await authApi.requestOtp(identifier.trim());
+      const formattedPhone = formatInternationalPhone(countryCode, identifier);
+      await authApi.requestOtp(formattedPhone);
       setStatusMsg(t('تمت إعادة إرسال رمز التحقق بنجاح.', 'Verification code resent successfully.'));
     } catch (err) {
       setError(errorText(err, lang));
@@ -157,8 +169,7 @@ export default function LoginScreen({ initialMode }) {
     setStatusMsg('');
     setBusy(true);
     try {
-      const rawPhone = identifier.trim();
-      const formattedPhone = rawPhone.startsWith('+') ? rawPhone : `${countryCode} ${rawPhone}`;
+      const formattedPhone = formatInternationalPhone(countryCode, identifier);
       await requestReset(formattedPhone);
       setStatusMsg(
         t(
@@ -302,6 +313,9 @@ export default function LoginScreen({ initialMode }) {
               {show ? <EyeOff /> : <Eye />}
             </Button>
           </div>
+          <small style={{ color: 'var(--muted-foreground)', fontSize: '11px', marginBlockStart: '-8px' }}>
+            {t('يجب أن تتكون كلمة المرور من 12 خانة على الأقل وتتضمن أحرفاً وأرقاماً.', 'Must be at least 12 characters and include letters and numbers.')}
+          </small>
           <Field
             label={t('تأكيد كلمة المرور', 'Confirm Password')}
             type={show ? 'text' : 'password'}

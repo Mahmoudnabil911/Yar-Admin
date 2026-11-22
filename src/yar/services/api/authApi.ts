@@ -134,6 +134,22 @@ async function handleResponse<T>(res: Response): Promise<T> {
   try {
     envelope = await res.json();
   } catch {
+    if (res.status === 502 || res.status === 504) {
+      throw new ApiAuthError(
+        'الخادم غير متاح حالياً أو يواجه ضغطاً، يرجى المحاولة بعد دقيقة.',
+        'Server is temporarily busy or unavailable; please retry in a minute.',
+        'bad_gateway',
+        res.status
+      );
+    }
+    if (res.status === 503) {
+      throw new ApiAuthError(
+        'الخدمة مشغولة حالياً، يرجى الانتظار قليلاً والمحاولة مجدداً.',
+        'Service temporarily busy, please try again in a moment.',
+        'service_unavailable',
+        res.status
+      );
+    }
     throw new ApiAuthError(
       'تعذر معالجة استجابة الخادم.',
       'Server response could not be parsed.',
