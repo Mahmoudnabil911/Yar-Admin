@@ -22,8 +22,20 @@ const errors={
  'Cannot deactivate or demote the last active administrator.':['لا يمكن إيقاف أو تغيير دور آخر مدير نظام نشط.'],
  'This account is inactive. Contact your administrator.':['الحساب موقوف. تواصل مع مدير النظام.'],
  'Access denied.':['غير مسموح بهذا الإجراء.'],
+ 'Invalid credentials':['بيانات الدخول غير صحيحة.'],
+ 'Invalid or expired OTP':['رمز التحقق غير صحيح أو منتهي.'],
+ 'Invalid or expired token':['الجلسة غير صالحة أو منتهية.'],
+ 'Invalid request':['الطلب غير صحيح.'],
+ 'Too many attempts; try later':['طلبات كثيرة، يرجى المحاولة لاحقاً.'],
 };
-export function errorText(error,lang){return lang==='ar'?(errors[error.message]?.[0]||'تعذر تنفيذ الإجراء. يرجى مراجعة البيانات والمحاولة مجددًا.'):error.message;}
+export function errorText(error,lang){
+ if(!error)return '';
+ if(lang==='ar'){
+  if(error.ar)return error.ar;
+  return errors[error.message]?.[0]||error.message||'تعذر تنفيذ الإجراء. يرجى مراجعة البيانات والمحاولة مجددًا.';
+ }
+ return error.en||error.message||'Action could not be completed.';
+}
 export function Profile({mandatory=false}){
  const t=useWords(),{lang}=usePrefs();useAccounts();const u=R.currentAccount();const[current,setCurrent]=useState(''),[password,setPassword]=useState(''),[confirm,setConfirm]=useState(''),[msg,setMsg]=useState(''),[busy,setBusy]=useState(false);
  if(!u)return null;

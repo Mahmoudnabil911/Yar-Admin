@@ -1,6 +1,8 @@
-// Browser-local adapter only. Replace with authenticated server enforcement before production.
+// Browser-local adapter + Live YAR Odoo 18 Backend API integration.
 import { iraqiPhone, reviewPhones } from './phone';
-import {PREVIEW_ACCOUNTS,PREVIEW_CREDENTIAL} from './previewAccounts';
+import { PREVIEW_ACCOUNTS, PREVIEW_CREDENTIAL } from './previewAccounts';
+import { authApi, clearStoredTokens } from '../services/api/authApi';
+export { authApi };
 export const ACCOUNT_KEY = 'YAR_ADMIN_ACCOUNTS_V2';
 const SESSION_KEY = 'YAR_ADMIN_SESSION_V1';
 const listeners = new Set();
@@ -27,7 +29,7 @@ async function verify(user, password) { return Boolean(user?.credential && (awai
 const safe = u => { const { credential, ...rest } = u; return rest; };
 export function currentAccount() {
  const raw = localStorage.getItem(SESSION_KEY); if (!raw) return null;
- try { const s = JSON.parse(raw), u = read().users.find(u => u.id === s.staffId); if (!u || u.status !== 'active' || !['admin','booking_employee'].includes(u.role) || u.sessionVersion !== s.version || Date.now() > s.expiresAt) return null; return { ...safe(u), staffId: u.id }; } catch { return null; }
+ try { const s = JSON.parse(raw), u = read().users.find(u => String(u.id) === String(s.staffId)); if (!u || u.status !== 'active' || !['admin','booking_employee'].includes(u.role) || (s.version != null && u.sessionVersion !== s.version) || Date.now() > s.expiresAt) return null; return { ...safe(u), staffId: String(u.id) }; } catch { return null; }
 }
 function requireUser(admin = false) { const u = currentAccount(); if (!u || u.mustChangePassword || (admin && u.role !== 'admin')) throw new Error('Access denied.'); return u; }
 function audit(d, actor, action, userId) { d.audit.push({ id: id(), actorId: actor?.id, action, userId, at: now() }); }
@@ -38,21 +40,95 @@ export function listRequests() { requireUser(true); return read().requests; }
 export function listAudit(userId) { const u = requireUser(); if (u.role !== 'admin' && u.id !== userId) throw new Error('Access denied.'); return read().audit.filter(a => !userId || a.userId === userId); }
 export async function login(identifier, password) {
  const alias=norm(identifier);const d=read();let u;
+
+ if (String(identifier || '').includes('@')) {
+  throw new Error('Enter a valid Iraqi mobile number.');
+ }
+
+ // 1. Attempt live Odoo API login
+ let apiError = null;
+ try {
+  const trimmed = String(identifier || '').trim();
+  const isPhone = /^\+?[0-9\s()-]{7,}$/.test(trimmed);
+  const payload = isPhone ? { login: trimmed, phone: trimmed, password } : { login: trimmed, password };
+  const tokens = await authApi.login(payload);
+  if (tokens && tokens.user) {
+   const apiUser = tokens.user;
+   const userId = String(apiUser.id || '2');
+   const userRole = apiUser.role === 'customer' ? 'booking_employee' : (apiUser.role || 'admin');
+   const phoneNum = typeof apiUser.phone === 'string' ? apiUser.phone : '';
+
+   u = d.users.find(x => String(x.id) === userId || (x.username && norm(x.username) === alias));
+   if (!u) {
+    u = {
+     id: userId,
+     name: apiUser.name || 'Administrator',
+     username: alias,
+     phone: phoneNum,
+     phoneE164: phoneNum,
+     phoneReviewRequired: false,
+     role: userRole,
+     status: 'active',
+     mustChangePassword: false,
+     sessionVersion: 1,
+     createdAt: now(),
+    };
+    d.users.push(u);
+   } else {
+    u.name = apiUser.name || u.name;
+    u.role = userRole;
+    u.status = 'active';
+    u.mustChangePassword = false;
+    u.lastLogin = now();
+    if (typeof u.sessionVersion !== 'number') {
+     u.sessionVersion = 1;
+    }
+    if (phoneNum) {
+     u.phone = phoneNum;
+     u.phoneE164 = phoneNum;
+    }
+   }
+   localStorage.setItem(SESSION_KEY, JSON.stringify({ staffId: String(u.id), version: u.sessionVersion, expiresAt: Date.now() + 12 * 3600000 }));
+   save(d);
+   return currentAccount();
+  }
+ } catch (err) {
+  apiError = err;
+ }
+
+ // 2. Local fallback for mock/preview/test environments
  const preview=PREVIEW_ACCOUNTS.find(a=>a.username===alias);
  if(preview){
   u=d.users.find(a=>a.username===alias);
   if(!u){
-   if(!await verify({credential:PREVIEW_CREDENTIAL},password))throw new Error('Incorrect mobile number or password.');
+   if(!await verify({credential:PREVIEW_CREDENTIAL},password)){
+    const err = new Error('Incorrect mobile number or password.');
+    if (apiError && apiError.ar) err.ar = apiError.ar;
+    throw err;
+   }
    for(const initial of PREVIEW_ACCOUNTS){if(d.users.some(a=>a.username===initial.username||a.id===initial.id))continue;d.users.push({...initial,localPreview:true,status:'active',mustChangePassword:false,sessionVersion:0,createdAt:now(),credential:{...PREVIEW_CREDENTIAL}});}
    u=d.users.find(a=>a.username===alias);
   }
- }else{const phone=iraqiPhone(identifier);u=d.users.find(u=>!u.phoneReviewRequired&&u.phoneE164===phone);}
- if (!u || !await verify(u, password)) throw new Error('Incorrect mobile number or password.');
+ }else{
+  const phone=iraqiPhone(identifier);
+  u=d.users.find(u=>!u.phoneReviewRequired&&u.phoneE164===phone);
+ }
+
+ if (!u || !await verify(u, password)) {
+  const err = new Error('Incorrect mobile number or password.');
+  if (apiError && apiError.ar) err.ar = apiError.ar;
+  throw err;
+ }
  if (u.status !== 'active' || !['admin','booking_employee'].includes(u.role)) throw new Error('This account is inactive. Contact your administrator.');
  u.lastLogin = now();
  localStorage.setItem(SESSION_KEY, JSON.stringify({ staffId: u.id, version: u.sessionVersion, expiresAt: Date.now() + 12 * 3600000 })); save(d); return currentAccount();
 }
-export function logout() { localStorage.removeItem(SESSION_KEY); emit(); }
+export function logout() {
+ clearStoredTokens();
+ authApi.logout().catch(() => {});
+ localStorage.removeItem(SESSION_KEY);
+ emit();
+}
 function validateUser(d, input) {
  if (String(input.name || '').trim().length < 2 || (input.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email))) throw new Error('Enter a full name and a valid optional email.');
  input.phoneE164=iraqiPhone(input.phoneE164 || input.phone);
@@ -81,6 +157,10 @@ export async function changePassword(current, password, confirm) {
  const s = JSON.parse(localStorage.getItem(SESSION_KEY)); s.version = stored.sessionVersion; localStorage.setItem(SESSION_KEY,JSON.stringify(s)); audit(d,u,'password.changed',u.id); notify(d,[stored],'security',['تم تغيير كلمة المرور','Password changed'],['تم تحديث كلمة مرور حسابك','Your account password was updated'],null); save(d);
 }
 export function requestReset(identifier) {
+ const trimmed = String(identifier || '').trim();
+ if (/^\+?[0-9\s()-]{7,}$/.test(trimmed)) {
+  authApi.requestPasswordReset(trimmed).catch(() => {});
+ }
  const d = read(), key = iraqiPhone(identifier), last = d.throttle[key] || 0; if (Date.now()-last < 60000) return;
  d.throttle[key] = Date.now(); const u = d.users.find(u => !u.phoneReviewRequired && u.phoneE164 === key);
  if (u?.status === 'active' && ['admin','booking_employee'].includes(u.role) && !d.requests.some(r => r.userId === u.id && r.status === 'pending')) {

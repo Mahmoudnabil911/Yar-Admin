@@ -47,9 +47,49 @@ function isH3SwallowedErrorBody(body: string): boolean {
 // Hosting compresses every response at the edge. Never compress a body (gzip, brotli,
 // CompressionStream) or set content-encoding here or in a server route: the body gets encoded
 // twice and renders garbled.
+const ODOO_BACKEND_URL = "https://yar-odoo.samaalrosha.com";
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      const url = new URL(request.url);
+      if (url.pathname.startsWith("/api/")) {
+        if (request.method === "OPTIONS") {
+          return new Response(null, {
+            status: 204,
+            headers: {
+              "access-control-allow-origin": "*",
+              "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+              "access-control-allow-headers": "Content-Type, Authorization, X-Requested-With",
+            },
+          });
+        }
+        const targetUrl = new URL(url.pathname + url.search, ODOO_BACKEND_URL);
+        const headers = new Headers(request.headers);
+        headers.set("host", targetUrl.host);
+        headers.delete("origin");
+        headers.delete("referer");
+
+        const proxyReq = new Request(targetUrl.toString(), {
+          method: request.method,
+          headers,
+          body: request.method !== "GET" && request.method !== "HEAD" ? await request.clone().arrayBuffer() : undefined,
+          redirect: "follow",
+        });
+
+        const res = await fetch(proxyReq);
+        const resHeaders = new Headers(res.headers);
+        resHeaders.set("access-control-allow-origin", "*");
+        resHeaders.set("access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+        resHeaders.set("access-control-allow-headers", "Content-Type, Authorization, X-Requested-With");
+
+        return new Response(res.body, {
+          status: res.status,
+          statusText: res.statusText,
+          headers: resHeaders,
+        });
+      }
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
