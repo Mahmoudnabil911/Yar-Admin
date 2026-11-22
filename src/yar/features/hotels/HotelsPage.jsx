@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { MapPin, ChevronDown, X } from 'lucide-react';
 import { Icon } from '../../components/ui/Icon';
 import { useToast } from '../../components/ui/Toast';
-import { getAccessToken } from '../../services/api/authApi';
+import { isAuthenticated } from '../../services/api/authApi';
 import { catalogAdminApi } from '../../services/api/catalogAdminApi';
 import CatalogListView from '../catalog/CatalogListView';
 import HotelEditor from './HotelEditor';
@@ -149,7 +149,7 @@ export function HotelsPage({
   const onBack = propOnBack || (() => setLocalEditId(null));
 
   const toast = useToast();
-  const token = getAccessToken();
+  const hasAuth = isAuthenticated();
 
   // Live state
   const [hotels, setHotels] = useState([]);
@@ -168,15 +168,15 @@ export function HotelsPage({
   const [hotelForRooms, setHotelForRooms] = useState(null);
 
   // Fetch live hotels, rooms, and room-rates from Odoo APIs (069, 072, 075)
-  const fetchLiveHotels = useCallback(async () => {
-    if (!token) return;
+  const fetchLiveHotels = useCallback(async (force = false) => {
+    if (!isAuthenticated()) return;
     setIsLoading(true);
     setErrorMsg('');
     try {
       const [hotelsRes, roomsRes, ratesRes] = await Promise.all([
-        catalogAdminApi.getHotels(),
-        catalogAdminApi.getRooms(),
-        catalogAdminApi.getRoomRates(),
+        catalogAdminApi.getHotels(force),
+        catalogAdminApi.getRooms(undefined, force),
+        catalogAdminApi.getRoomRates(undefined, force),
       ]);
 
       setHotels(hotelsRes.items || []);
@@ -188,16 +188,16 @@ export function HotelsPage({
     } finally {
       setIsLoading(false);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
-    if (token) {
+    if (hasAuth) {
       fetchLiveHotels();
     }
-  }, [token, fetchLiveHotels]);
+  }, [hasAuth, fetchLiveHotels]);
 
   // If not authenticated, fallback to legacy catalog view
-  if (!token) {
+  if (!hasAuth) {
     if (editId) {
       return <HotelEditor key={editId} recordId={editId} onBack={onBack} />;
     }
@@ -294,7 +294,7 @@ export function HotelsPage({
           <button
             type="button"
             className="button secondary"
-            onClick={fetchLiveHotels}
+            onClick={() => fetchLiveHotels(true)}
             disabled={isLoading}
             title="تحديث البيانات من السيرفر"
           >

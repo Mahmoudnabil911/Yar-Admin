@@ -1,5 +1,5 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
-import { authApi, getStoredTokens, clearStoredTokens, ApiAuthError } from '@/yar/services/api/authApi';
+import { authApi, getStoredTokens, setStoredTokens, clearStoredTokens, ApiAuthError, fetchWithAuth } from '@/yar/services/api/authApi';
 import * as R from '@/yar/accounts/repository';
 
 describe('YAR Odoo 18 Auth API & Repository Integration', () => {
@@ -138,6 +138,111 @@ describe('YAR Odoo 18 Auth API & Repository Integration', () => {
     R.logout();
     expect(R.currentAccount()).toBeNull();
     expect(getStoredTokens()).toBeNull();
+  });
+
+  it('calls authApi.getMe (API 012) with Bearer token', async () => {
+    setStoredTokens({
+      access_token: 'valid-test-access-token',
+      refresh_token: 'valid-test-refresh-token',
+      token_type: 'Bearer',
+      expires_in: 900,
+      user: {
+        id: 2,
+        name: 'Administrator',
+        phone: false,
+        role: 'admin',
+        verified: true,
+      },
+    });
+
+    const mockMeEnvelope = {
+      success: true,
+      data: {
+        id: 2,
+        name: 'Administrator Live',
+        phone: '+9647831400500',
+        role: 'admin',
+        verified: true,
+      },
+      message: { ar: 'تمت العملية بنجاح', en: 'Operation completed' },
+      error: null,
+    };
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      status: 200,
+      ok: true,
+      json: async () => mockMeEnvelope,
+    } as Response);
+
+    const me = await authApi.getMe();
+    expect(me.name).toBe('Administrator Live');
+    expect(me.phone).toBe('+9647831400500');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/auth/me'),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer valid-test-access-token',
+        }),
+      })
+    );
+  });
+
+  it('automatically refreshes token on 401 via fetchWithAuth and retries request', async () => {
+    setStoredTokens({
+      access_token: 'expired-access-token',
+      refresh_token: 'valid-refresh-token',
+      token_type: 'Bearer',
+      expires_in: 900,
+      user: { id: 2, name: 'Admin', phone: false, role: 'admin', verified: true },
+    });
+
+    const mockRefreshEnvelope = {
+      success: true,
+      data: {
+        access_token: 'fresh-new-token',
+        refresh_token: 'fresh-refresh-token',
+        token_type: 'Bearer',
+        expires_in: 900,
+        user: { id: 2, name: 'Admin', phone: false, role: 'admin', verified: true },
+      },
+      message: { ar: 'تم التجديد', en: 'Refreshed' },
+      error: null,
+    };
+
+    const mockDataEnvelope = {
+      success: true,
+      data: { items: [{ id: 1, name: 'Hotel 1' }] },
+      message: { ar: 'نجاح', en: 'Success' },
+      error: null,
+    };
+
+    const fetchMock = vi.fn();
+    // 1st call: returns 401 Unauthorized
+    fetchMock.mockResolvedValueOnce({
+      status: 401,
+      ok: false,
+      json: async () => ({ success: false, error: { code: 'expired_token' } }),
+    } as Response);
+    // 2nd call: POST /api/v1/auth/refresh returns new tokens
+    fetchMock.mockResolvedValueOnce({
+      status: 200,
+      ok: true,
+      json: async () => mockRefreshEnvelope,
+    } as Response);
+    // 3rd call: retried original request with fresh-new-token returns 200
+    fetchMock.mockResolvedValueOnce({
+      status: 200,
+      ok: true,
+      json: async () => mockDataEnvelope,
+    } as Response);
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(fetchMock);
+
+    const res = await fetchWithAuth('https://yar-odoo.samaalrosha.com/api/v1/admin/hotels');
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.data.items).toHaveLength(1);
+    expect(getStoredTokens()?.access_token).toBe('fresh-new-token');
   });
 });
 

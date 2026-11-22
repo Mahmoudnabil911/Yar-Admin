@@ -5,7 +5,7 @@
  * - POST /api/v1/admin/fx (API 112 | Set daily USD to IQD exchange rate)
  */
 
-import { getApiBaseUrl, getAccessToken, ApiAuthError } from './authApi';
+import { getApiBaseUrl, fetchWithAuth, ApiAuthError } from './authApi';
 
 export interface FxRateItem {
   id: number;
@@ -73,17 +73,8 @@ export const fxApi = {
    */
   async getRates(): Promise<FxRatesData> {
     const baseUrl = getApiBaseUrl();
-    const token = getAccessToken();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const res = await fetch(`${baseUrl}/api/v1/admin/fx`, {
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/fx`, {
       method: 'GET',
-      headers,
     });
     return await handleFxResponse<FxRatesData>(res);
   },
@@ -94,17 +85,8 @@ export const fxApi = {
    */
   async setRate(rate_iqd_per_usd: number): Promise<SetFxRateData> {
     const baseUrl = getApiBaseUrl();
-    const token = getAccessToken();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const res = await fetch(`${baseUrl}/api/v1/admin/fx`, {
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/fx`, {
       method: 'POST',
-      headers,
       body: JSON.stringify({ rate_iqd_per_usd }),
     });
     return await handleFxResponse<SetFxRateData>(res);

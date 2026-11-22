@@ -4,7 +4,7 @@
  * Endpoint: GET /api/v1/reports/overview
  */
 
-import { getApiBaseUrl, getAccessToken, ApiAuthError } from './authApi';
+import { getApiBaseUrl, fetchWithAuth, ApiAuthError } from './authApi';
 
 export interface DashboardSummaryData {
   booking_count: number;
@@ -39,26 +39,38 @@ async function handleReportsResponse<T>(res: Response): Promise<T> {
   return json.data as T;
 }
 
+let overviewPromise: Promise<DashboardSummaryData> | null = null;
+let cachedOverview: DashboardSummaryData | null = null;
+let lastOverviewTime = 0;
+
 export const reportsApi = {
   /**
    * API 114 | Dashboard booking summary | ملخص الحجوزات للوحة الإدارة
    * GET /api/v1/reports/overview
    */
-  async getDashboardSummary(): Promise<DashboardSummaryData> {
-    const baseUrl = getApiBaseUrl();
-    const token = getAccessToken();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+  async getDashboardSummary(force = false): Promise<DashboardSummaryData> {
+    if (!force && cachedOverview && (Date.now() - lastOverviewTime < 10000)) {
+      return cachedOverview;
     }
 
-    const res = await fetch(`${baseUrl}/api/v1/reports/overview`, {
-      method: 'GET',
-      headers,
+    if (!force && overviewPromise) {
+      return overviewPromise;
+    }
+
+    overviewPromise = (async () => {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetchWithAuth(`${baseUrl}/api/v1/reports/overview`, {
+        method: 'GET',
+      });
+      const data = await handleReportsResponse<DashboardSummaryData>(res);
+      cachedOverview = data;
+      lastOverviewTime = Date.now();
+      return data;
+    })().finally(() => {
+      overviewPromise = null;
     });
-    return await handleReportsResponse<DashboardSummaryData>(res);
+
+    return overviewPromise;
   },
 };
 

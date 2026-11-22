@@ -8,7 +8,7 @@
  * - PATCH /api/v1/bookings/:id/assign       (API 042 | Assign booking to staff)
  */
 
-import { getApiBaseUrl, getAccessToken, ApiAuthError } from './authApi';
+import { getApiBaseUrl, fetchWithAuth, ApiAuthError } from './authApi';
 
 export interface BookingCustomer {
   id?: number | string;
@@ -77,6 +77,19 @@ export interface ListBookingsParams {
   status?: string;
   service?: string;
   customer?: string;
+}
+
+interface CachedBookings {
+  data: ListBookingsData;
+  time: number;
+}
+
+const bookingsCache = new Map<string, CachedBookings>();
+const inFlightRequests = new Map<string, Promise<ListBookingsData>>();
+
+export function invalidateBookingsCache(): void {
+  bookingsCache.clear();
+  inFlightRequests.clear();
 }
 
 export interface ListBookingsData {
@@ -168,30 +181,43 @@ export const bookingsApi = {
    * API 038 | List bookings by role | قائمة الحجوزات حسب الصلاحيات
    * GET /api/v1/bookings
    */
-  async listBookings(params: ListBookingsParams = {}): Promise<ListBookingsData> {
+  async listBookings(params: ListBookingsParams = {}, force = false): Promise<ListBookingsData> {
     const baseUrl = getApiBaseUrl();
-    const token = getAccessToken();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
     const query = new URLSearchParams();
     if (params.limit != null) query.set('limit', String(params.limit));
     if (params.offset != null) query.set('offset', String(params.offset));
     if (params.status) query.set('status', params.status);
     if (params.service) query.set('service', params.service);
+    if (params.customer) query.set('customer', params.customer);
 
     const queryString = query.toString();
-    const url = `${baseUrl}/api/v1/bookings${queryString ? `?${queryString}` : ''}`;
+    const cacheKey = queryString || '__default__';
 
-    const res = await fetch(url, {
-      method: 'GET',
-      headers,
+    if (!force) {
+      const cached = bookingsCache.get(cacheKey);
+      if (cached && Date.now() - cached.time < 10000) {
+        return cached.data;
+      }
+      const inFlight = inFlightRequests.get(cacheKey);
+      if (inFlight) {
+        return inFlight;
+      }
+    }
+
+    const promise = (async () => {
+      const url = `${baseUrl}/api/v1/bookings${queryString ? `?${queryString}` : ''}`;
+      const res = await fetchWithAuth(url, {
+        method: 'GET',
+      });
+      const data = await handleBookingResponse<ListBookingsData>(res);
+      bookingsCache.set(cacheKey, { data, time: Date.now() });
+      return data;
+    })().finally(() => {
+      inFlightRequests.delete(cacheKey);
     });
-    return await handleBookingResponse<ListBookingsData>(res);
+
+    inFlightRequests.set(cacheKey, promise);
+    return promise;
   },
 
   /**
@@ -199,24 +225,20 @@ export const bookingsApi = {
    * POST /api/v1/bookings
    */
   async createBooking(payload: CreateBookingPayload): Promise<BookingRecord> {
+    invalidateBookingsCache();
     const baseUrl = getApiBaseUrl();
-    const token = getAccessToken();
     const requestKey = payload.request_key || generateRequestKey();
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       'Idempotency-Key': requestKey,
     };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
 
     const body = {
       ...payload,
       request_key: requestKey,
     };
 
-    const res = await fetch(`${baseUrl}/api/v1/bookings`, {
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/bookings`, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -230,17 +252,8 @@ export const bookingsApi = {
    */
   async getBooking(id: number | string): Promise<BookingRecord> {
     const baseUrl = getApiBaseUrl();
-    const token = getAccessToken();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const res = await fetch(`${baseUrl}/api/v1/bookings/${encodeURIComponent(id)}`, {
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/bookings/${encodeURIComponent(id)}`, {
       method: 'GET',
-      headers,
     });
     return await handleBookingResponse<BookingRecord>(res);
   },
@@ -250,18 +263,10 @@ export const bookingsApi = {
    * POST /api/v1/bookings/:id/cancel
    */
   async cancelBooking(id: number | string, reason = ''): Promise<BookingRecord> {
+    invalidateBookingsCache();
     const baseUrl = getApiBaseUrl();
-    const token = getAccessToken();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const res = await fetch(`${baseUrl}/api/v1/bookings/${encodeURIComponent(id)}/cancel`, {
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/bookings/${encodeURIComponent(id)}/cancel`, {
       method: 'POST',
-      headers,
       body: JSON.stringify({ reason }),
     });
     return await handleBookingResponse<BookingRecord>(res);
@@ -272,18 +277,10 @@ export const bookingsApi = {
    * PATCH /api/v1/bookings/:id/assign
    */
   async assignBooking(id: number | string, staffUserId: number): Promise<BookingRecord> {
+    invalidateBookingsCache();
     const baseUrl = getApiBaseUrl();
-    const token = getAccessToken();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const res = await fetch(`${baseUrl}/api/v1/bookings/${encodeURIComponent(id)}/assign`, {
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/bookings/${encodeURIComponent(id)}/assign`, {
       method: 'PATCH',
-      headers,
       body: JSON.stringify({ staff_user_id: staffUserId }),
     });
     return await handleBookingResponse<BookingRecord>(res);

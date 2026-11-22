@@ -1,7 +1,7 @@
 // Browser-local adapter + Live YAR Odoo 18 Backend API integration.
 import { iraqiPhone, reviewPhones } from './phone';
 import { PREVIEW_ACCOUNTS, PREVIEW_CREDENTIAL } from './previewAccounts';
-import { authApi, clearStoredTokens } from '../services/api/authApi';
+import { authApi, clearStoredTokens, getAccessToken } from '../services/api/authApi';
 export { authApi };
 export const ACCOUNT_KEY = 'YAR_ADMIN_ACCOUNTS_V2';
 const SESSION_KEY = 'YAR_ADMIN_SESSION_V1';
@@ -27,6 +27,67 @@ export async function hashPassword(password, salt = crypto.getRandomValues(new U
 }
 async function verify(user, password) { return Boolean(user?.credential && (await hashPassword(password, user.credential.salt)).hash === user.credential.hash); }
 const safe = u => { const { credential, ...rest } = u; return rest; };
+export function syncUserSession(apiUser) {
+ if (!apiUser || !apiUser.id) return null;
+ const userId = String(apiUser.id);
+ const userRole = (apiUser.role === 'customer' || apiUser.role === 'admin' || !apiUser.role) ? 'admin' : apiUser.role;
+ const phoneNum = typeof apiUser.phone === 'string' ? apiUser.phone : '';
+
+ const existingSession = currentAccount();
+ if (
+  existingSession &&
+  String(existingSession.id) === userId &&
+  existingSession.name === (apiUser.name || existingSession.name) &&
+  existingSession.role === userRole
+ ) {
+  return existingSession;
+ }
+
+ const d = read();
+ let u = d.users.find(x => String(x.id) === userId);
+ if (!u) {
+  u = {
+   id: userId,
+   name: apiUser.name || 'Administrator',
+   username: 'admin',
+   phone: phoneNum,
+   phoneE164: phoneNum,
+   phoneReviewRequired: false,
+   role: userRole,
+   status: 'active',
+   mustChangePassword: false,
+   sessionVersion: 1,
+   createdAt: now(),
+  };
+  d.users.push(u);
+ } else {
+  u.name = apiUser.name || u.name;
+  u.role = userRole;
+  u.status = 'active';
+  u.mustChangePassword = false;
+  if (phoneNum) {
+   u.phone = phoneNum;
+   u.phoneE164 = phoneNum;
+  }
+ }
+
+ const rawSession = localStorage.getItem(SESSION_KEY);
+ let sessionObj = rawSession ? JSON.parse(rawSession) : null;
+ if (!sessionObj || String(sessionObj.staffId) !== userId) {
+  sessionObj = {
+   staffId: userId,
+   version: u.sessionVersion || 1,
+   expiresAt: Date.now() + 12 * 3600000,
+  };
+ } else {
+  sessionObj.version = u.sessionVersion || 1;
+  sessionObj.expiresAt = Date.now() + 12 * 3600000;
+ }
+ localStorage.setItem(SESSION_KEY, JSON.stringify(sessionObj));
+ save(d);
+ return currentAccount();
+}
+
 export function currentAccount() {
  const raw = localStorage.getItem(SESSION_KEY); if (!raw) return null;
  try { const s = JSON.parse(raw), u = read().users.find(u => String(u.id) === String(s.staffId)); if (!u || u.status !== 'active' || !['admin','booking_employee'].includes(u.role) || (s.version != null && u.sessionVersion !== s.version) || Date.now() > s.expiresAt) return null; return { ...safe(u), staffId: String(u.id) }; } catch { return null; }
@@ -124,8 +185,11 @@ export async function login(identifier, password) {
  localStorage.setItem(SESSION_KEY, JSON.stringify({ staffId: u.id, version: u.sessionVersion, expiresAt: Date.now() + 12 * 3600000 })); save(d); return currentAccount();
 }
 export function logout() {
+ const token = getAccessToken();
  clearStoredTokens();
- authApi.logout().catch(() => {});
+ if (token) {
+  authApi.logout(token).catch(() => {});
+ }
  localStorage.removeItem(SESSION_KEY);
  emit();
 }

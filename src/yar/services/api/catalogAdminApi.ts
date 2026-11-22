@@ -13,7 +13,7 @@
  * - GET  /api/v1/admin/users           (API 092 | عرض حسابات النظام والعملاء)
  */
 
-import { getApiBaseUrl, getAccessToken, ApiAuthError } from './authApi';
+import { getApiBaseUrl, fetchWithAuth, ApiAuthError } from './authApi';
 
 export interface AdminHotelItem {
   id: number;
@@ -113,28 +113,58 @@ async function handleResponse<T>(res: Response, fallbackMsg: string): Promise<T>
   return json.data as T;
 }
 
-function getAuthHeaders(): Record<string, string> {
-  const token = getAccessToken();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+interface CachedItem<T> {
+  data: T;
+  time: number;
+}
+const catalogCache = new Map<string, CachedItem<unknown>>();
+const catalogInFlight = new Map<string, Promise<unknown>>();
+
+export function invalidateCatalogCache(): void {
+  catalogCache.clear();
+  catalogInFlight.clear();
+}
+
+async function fetchCatalogWithDeduplication<T>(
+  cacheKey: string,
+  fetcher: () => Promise<T>,
+  ttlMs = 10000,
+  force = false
+): Promise<T> {
+  if (!force) {
+    const cached = catalogCache.get(cacheKey) as CachedItem<T> | undefined;
+    if (cached && Date.now() - cached.time < ttlMs) {
+      return cached.data;
+    }
+    const inFlight = catalogInFlight.get(cacheKey) as Promise<T> | undefined;
+    if (inFlight) {
+      return inFlight;
+    }
   }
-  return headers;
+
+  const promise = fetcher().then((data) => {
+    catalogCache.set(cacheKey, { data, time: Date.now() });
+    return data;
+  }).finally(() => {
+    catalogInFlight.delete(cacheKey);
+  });
+
+  catalogInFlight.set(cacheKey, promise);
+  return promise;
 }
 
 export const catalogAdminApi = {
   /**
    * API 069 | عرض الفنادق
    */
-  async getHotels(): Promise<{ items: AdminHotelItem[] }> {
-    const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/admin/hotels`, {
-      method: 'GET',
-      headers: getAuthHeaders(),
-    });
-    return await handleResponse<{ items: AdminHotelItem[] }>(res, 'فشل جلب قائمة الفنادق.');
+  async getHotels(force = false): Promise<{ items: AdminHotelItem[] }> {
+    return fetchCatalogWithDeduplication('hotels', async () => {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/hotels`, {
+        method: 'GET',
+      });
+      return await handleResponse<{ items: AdminHotelItem[] }>(res, 'فشل جلب قائمة الفنادق.');
+    }, 10000, force);
   },
 
   /**
@@ -156,6 +186,7 @@ export const catalogAdminApi = {
     active?: boolean;
     supplier_id?: number;
   }): Promise<AdminHotelItem> {
+    invalidateCatalogCache();
     const baseUrl = getApiBaseUrl();
     const body: Record<string, unknown> = {
       name: payload.name,
@@ -174,9 +205,8 @@ export const catalogAdminApi = {
     if (payload.cancellation_policy) body.cancellation_policy = payload.cancellation_policy;
     if (payload.supplier_id) body.supplier_id = payload.supplier_id;
 
-    const res = await fetch(`${baseUrl}/api/v1/admin/hotels`, {
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/hotels`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(body),
     });
     const data = await handleResponse<{ id: number } | number>(res, 'فشل إنشاء الفندق على الخادم.');
@@ -188,10 +218,10 @@ export const catalogAdminApi = {
    * API 071 | تعديل الفنادق | PATCH /api/v1/admin/hotels/{record_id}
    */
   async updateHotel(recordId: number, payload: Partial<AdminHotelItem>): Promise<{ id: number }> {
+    invalidateCatalogCache();
     const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/admin/hotels/${recordId}`, {
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/hotels/${recordId}`, {
       method: 'PATCH',
-      headers: getAuthHeaders(),
       body: JSON.stringify(payload),
     });
     return await handleResponse<{ id: number }>(res, 'فشل تعديل بيانات الفندق على الخادم.');
@@ -200,17 +230,19 @@ export const catalogAdminApi = {
   /**
    * API 072 | عرض غرف الفنادق | GET /api/v1/admin/rooms
    */
-  async getRooms(params?: { hotel_id?: number }): Promise<{ items: AdminRoomItem[] }> {
-    const baseUrl = getApiBaseUrl();
-    let url = `${baseUrl}/api/v1/admin/rooms`;
-    if (params?.hotel_id) {
-      url += `?hotel_id=${encodeURIComponent(String(params.hotel_id))}`;
-    }
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: getAuthHeaders(),
-    });
-    return await handleResponse<{ items: AdminRoomItem[] }>(res, 'فشل جلب الغرف.');
+  async getRooms(params?: { hotel_id?: number }, force = false): Promise<{ items: AdminRoomItem[] }> {
+    const cacheKey = `rooms_${params?.hotel_id || 'all'}`;
+    return fetchCatalogWithDeduplication(cacheKey, async () => {
+      const baseUrl = getApiBaseUrl();
+      let url = `${baseUrl}/api/v1/admin/rooms`;
+      if (params?.hotel_id) {
+        url += `?hotel_id=${encodeURIComponent(String(params.hotel_id))}`;
+      }
+      const res = await fetchWithAuth(url, {
+        method: 'GET',
+      });
+      return await handleResponse<{ items: AdminRoomItem[] }>(res, 'فشل جلب الغرف.');
+    }, 10000, force);
   },
 
   /**
@@ -230,6 +262,7 @@ export const catalogAdminApi = {
     cancellation_policy?: string;
     active?: boolean;
   }): Promise<AdminRoomItem> {
+    invalidateCatalogCache();
     const baseUrl = getApiBaseUrl();
     const body: Record<string, unknown> = {
       hotel_id: payload.hotel_id,
@@ -246,9 +279,8 @@ export const catalogAdminApi = {
     if (payload.gallery) body.gallery = payload.gallery;
     if (payload.cancellation_policy) body.cancellation_policy = payload.cancellation_policy;
 
-    const res = await fetch(`${baseUrl}/api/v1/admin/rooms`, {
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/rooms`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(body),
     });
     const data = await handleResponse<{ id: number } | number>(res, 'فشل إنشاء الغرفة على الخادم.');
@@ -260,10 +292,10 @@ export const catalogAdminApi = {
    * API 074 | تعديل غرف الفنادق | PATCH /api/v1/admin/rooms/{record_id}
    */
   async updateRoom(recordId: number, payload: Partial<AdminRoomItem>): Promise<{ id: number }> {
+    invalidateCatalogCache();
     const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/admin/rooms/${recordId}`, {
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/rooms/${recordId}`, {
       method: 'PATCH',
-      headers: getAuthHeaders(),
       body: JSON.stringify(payload),
     });
     return await handleResponse<{ id: number }>(res, 'فشل تعديل بيانات الغرفة على الخادم.');
@@ -272,17 +304,19 @@ export const catalogAdminApi = {
   /**
    * API 075 | عرض أسعار وتوافر الغرف | GET /api/v1/admin/room-rates
    */
-  async getRoomRates(params?: { room_id?: number }): Promise<{ items: AdminRoomRateItem[] }> {
-    const baseUrl = getApiBaseUrl();
-    let url = `${baseUrl}/api/v1/admin/room-rates`;
-    if (params?.room_id) {
-      url += `?room_id=${encodeURIComponent(String(params.room_id))}`;
-    }
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: getAuthHeaders(),
-    });
-    return await handleResponse<{ items: AdminRoomRateItem[] }>(res, 'فشل جلب أسعار الغرف.');
+  async getRoomRates(params?: { room_id?: number }, force = false): Promise<{ items: AdminRoomRateItem[] }> {
+    const cacheKey = `rates_${params?.room_id || 'all'}`;
+    return fetchCatalogWithDeduplication(cacheKey, async () => {
+      const baseUrl = getApiBaseUrl();
+      let url = `${baseUrl}/api/v1/admin/room-rates`;
+      if (params?.room_id) {
+        url += `?room_id=${encodeURIComponent(String(params.room_id))}`;
+      }
+      const res = await fetchWithAuth(url, {
+        method: 'GET',
+      });
+      return await handleResponse<{ items: AdminRoomRateItem[] }>(res, 'فشل جلب أسعار الغرف.');
+    }, 10000, force);
   },
 
   /**
@@ -301,6 +335,7 @@ export const catalogAdminApi = {
     min_stay_nights?: number | string;
     active?: boolean;
   }): Promise<AdminRoomRateItem> {
+    invalidateCatalogCache();
     const baseUrl = getApiBaseUrl();
     const body: Record<string, unknown> = {
       room_id: payload.room_id,
@@ -316,9 +351,8 @@ export const catalogAdminApi = {
     if (payload.cancellation_policy) body.cancellation_policy = payload.cancellation_policy;
     if (payload.min_stay_nights !== undefined) body.min_stay_nights = payload.min_stay_nights;
 
-    const res = await fetch(`${baseUrl}/api/v1/admin/room-rates`, {
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/room-rates`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(body),
     });
     const data = await handleResponse<{ id: number } | number>(res, 'فشل إنشاء سعر الغرفة على الخادم.');
@@ -330,10 +364,10 @@ export const catalogAdminApi = {
    * API 077 | تعديل أسعار وتوافر الغرف | PATCH /api/v1/admin/room-rates/{record_id}
    */
   async updateRoomRate(recordId: number, payload: Partial<AdminRoomRateItem>): Promise<{ id: number }> {
+    invalidateCatalogCache();
     const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/admin/room-rates/${recordId}`, {
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/room-rates/${recordId}`, {
       method: 'PATCH',
-      headers: getAuthHeaders(),
       body: JSON.stringify(payload),
     });
     return await handleResponse<{ id: number }>(res, 'فشل تعديل سعر الغرفة على الخادم.');
@@ -342,13 +376,14 @@ export const catalogAdminApi = {
   /**
    * API 078 | عرض الباقات والنقل والجولات والسيارات
    */
-  async getServices(): Promise<{ items: AdminServiceItem[] }> {
-    const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/admin/services`, {
-      method: 'GET',
-      headers: getAuthHeaders(),
-    });
-    return await handleResponse<{ items: AdminServiceItem[] }>(res, 'فشل جلب قائمة الخدمات.');
+  async getServices(force = false): Promise<{ items: AdminServiceItem[] }> {
+    return fetchCatalogWithDeduplication('services', async () => {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/services`, {
+        method: 'GET',
+      });
+      return await handleResponse<{ items: AdminServiceItem[] }>(res, 'فشل جلب قائمة الخدمات.');
+    }, 10000, force);
   },
 
   /**
@@ -361,10 +396,10 @@ export const catalogAdminApi = {
     price_usd: number;
     supplier_cost_usd?: number;
   }): Promise<AdminServiceItem> {
+    invalidateCatalogCache();
     const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/admin/services`, {
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/services`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify({
         ...payload,
         active: true,
@@ -379,24 +414,26 @@ export const catalogAdminApi = {
   /**
    * API 081 | عرض خيارات الخدمات
    */
-  async getServiceOptions(): Promise<{ items: AdminServiceOptionItem[] }> {
-    const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/admin/service-options`, {
-      method: 'GET',
-      headers: getAuthHeaders(),
-    });
-    return await handleResponse<{ items: AdminServiceOptionItem[] }>(res, 'فشل جلب خيارات الخدمات.');
+  async getServiceOptions(force = false): Promise<{ items: AdminServiceOptionItem[] }> {
+    return fetchCatalogWithDeduplication('service_options', async () => {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/service-options`, {
+        method: 'GET',
+      });
+      return await handleResponse<{ items: AdminServiceOptionItem[] }>(res, 'فشل جلب خيارات الخدمات.');
+    }, 10000, force);
   },
 
   /**
    * API 092 | عرض حسابات النظام والعملاء
    */
-  async getUsers(): Promise<{ items: AdminUserItem[] }> {
-    const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/admin/users`, {
-      method: 'GET',
-      headers: getAuthHeaders(),
-    });
-    return await handleResponse<{ items: AdminUserItem[] }>(res, 'فشل جلب قائمة العملاء والمستخدمين.');
+  async getUsers(force = false): Promise<{ items: AdminUserItem[] }> {
+    return fetchCatalogWithDeduplication('users', async () => {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/users`, {
+        method: 'GET',
+      });
+      return await handleResponse<{ items: AdminUserItem[] }>(res, 'فشل جلب قائمة العملاء والمستخدمين.');
+    }, 10000, force);
   },
 };

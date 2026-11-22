@@ -1,5 +1,5 @@
 import { Profile } from '../accounts/AccountUI';
-import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { useSearchParams, useLocation } from '../lib/router';
 import Layout from '../components/layout/Layout';
 import { Drawer } from '../components/ui/Drawer';
@@ -9,6 +9,8 @@ import { useSession } from '../auth/useSession';
 import LoginScreen from '../auth/LoginScreen';
 import { usePrefs } from '../i18n/prefs';
 import AccessDenied from '../auth/AccessDenied';
+import { authApi, isAuthenticated, isAccessTokenExpired } from '../services/api/authApi';
+import { syncUserSession } from '../accounts/repository';
 
 // Overview eager for instant first render; other pages are code-split.
 import OverviewPage from '../features/overview/OverviewPage';
@@ -47,10 +49,44 @@ export function resolvePage(pageParam, pathname) {
 export default function App() {
   const session = useSession();
   const { lang } = usePrefs();
+  const hasSyncedMeRef = useRef(false);
+
+  // API 012 | Sync session live with Odoo server (GET /api/v1/auth/me)
+  // Appears in Network tab and validates token freshness / role from backend
+  useEffect(() => {
+    if (!isAuthenticated() || hasSyncedMeRef.current) return;
+    hasSyncedMeRef.current = true;
+    let mounted = true;
+
+    authApi.getMe().then((meUser) => {
+      if (!mounted || !meUser) return;
+      syncUserSession(meUser);
+    }).catch((err) => {
+      console.warn('[Session] getMe failed or session expired:', err);
+      if (err?.status === 401 || err?.code === 'no_token' || err?.code === 'no_refresh_token') {
+        auth.signOut();
+      }
+    });
+
+    // Proactive token refresh interval (checks every 3 minutes)
+    const interval = setInterval(() => {
+      if (isAuthenticated() && isAccessTokenExpired()) {
+        authApi.refreshToken().catch((err) => {
+          console.warn('[Session] Proactive token refresh failed:', err);
+        });
+      }
+    }, 3 * 60 * 1000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   if (!session) return <SignedOut />;
   if (session.mustChangePassword) return <><Profile mandatory /><button className="button secondary" onClick={() => auth.signOut()}>تسجيل الخروج</button></>;
   // Remount on language change so locale-formatted dates/numbers refresh everywhere.
-  return <Dashboard key={`${session.staffId}-${lang}`} session={session} />;
+  return <Dashboard key={lang} session={session} />;
 }
 
 function SignedOut() { useEffect(() => { window.location.replace('/login'); }, []); return null; }

@@ -6,7 +6,7 @@ import { staffStorage } from '../../services/storage/staffStorage';
 import { operationsModel as M } from '../../services/models';
 import { useToast } from '../../components/ui/Toast';
 import { bookingsApi } from '../../services/api/bookingsApi';
-import { getAccessToken } from '../../services/api/authApi';
+import { getAccessToken, isAuthenticated } from '../../services/api/authApi';
 
 export function BookingsPage({
   onOpenBooking,
@@ -40,10 +40,10 @@ export function BookingsPage({
   const pageSize = 10;
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const loadBackendBookings = useCallback(async () => {
+  const loadBackendBookings = useCallback(async (force = false) => {
     setIsSyncing(true);
     try {
-      const res = await bookingsApi.listBookings({ limit: 100 });
+      const res = await bookingsApi.listBookings({ limit: 100 }, force);
       if (res && Array.isArray(res.items)) {
         const mapped = res.items.map(bookingsApi.mapRecordToRow);
         setBackendItems(mapped);
@@ -52,10 +52,11 @@ export function BookingsPage({
       }
     } catch (err) {
       console.warn('Backend bookings fetch:', err);
-      if (!getAccessToken()) {
+      if (!isAuthenticated()) {
         setBackendItems(operationsStorage.getBookings());
       } else {
-        setBackendItems([]);
+        // Do not wipe out existing data on transient network hiccups
+        setBackendItems(prev => prev || []);
       }
     } finally {
       setIsSyncing(false);
@@ -64,7 +65,7 @@ export function BookingsPage({
 
   const handleSync = async () => {
     try {
-      await loadBackendBookings();
+      await loadBackendBookings(true);
       toast('تمت مزامنة الحجوزات مع الخادم.');
     } catch {
       toast('تعذرت المزامنة مع الخادم.');

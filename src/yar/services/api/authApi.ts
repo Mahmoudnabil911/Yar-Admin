@@ -88,9 +88,14 @@ export class ApiAuthError extends Error {
   }
 }
 
+export interface StoredAuthTokens extends AuthTokens {
+  saved_at?: number;
+  expires_at?: number;
+}
+
 export const TOKENS_KEY = 'YAR_AUTH_TOKENS_V1';
 
-export function getStoredTokens(): AuthTokens | null {
+export function getStoredTokens(): StoredAuthTokens | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(TOKENS_KEY);
@@ -102,11 +107,21 @@ export function getStoredTokens(): AuthTokens | null {
 
 export function setStoredTokens(tokens: AuthTokens): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
+  const expiresIn = typeof tokens.expires_in === 'number' && tokens.expires_in > 0 ? tokens.expires_in : 900;
+  const enriched: StoredAuthTokens = {
+    ...tokens,
+    saved_at: Date.now(),
+    // Mark token expired 60 seconds earlier than 900s to proactively refresh before server rejects it
+    expires_at: Date.now() + Math.max(60, expiresIn - 60) * 1000,
+  };
+  localStorage.setItem(TOKENS_KEY, JSON.stringify(enriched));
 }
 
 export function clearStoredTokens(): void {
   if (typeof window === 'undefined') return;
+  cachedMeUser = null;
+  lastMeTime = 0;
+  mePromise = null;
   localStorage.removeItem(TOKENS_KEY);
 }
 
@@ -118,12 +133,129 @@ export function getRefreshToken(): string | null {
   return getStoredTokens()?.refresh_token || null;
 }
 
+export function isAccessTokenExpired(): boolean {
+  const stored = getStoredTokens();
+  if (!stored || !stored.access_token) return true;
+  if (stored.expires_at && Date.now() >= stored.expires_at) return true;
+  return false;
+}
+
+export function isAuthenticated(): boolean {
+  return Boolean(getAccessToken() || getRefreshToken());
+}
+
+let refreshPromise: Promise<AuthTokens> | null = null;
+
+/**
+ * Concurrency-safe singleton token refresh.
+ * Because Odoo implements single-use rotating refresh tokens (replay revokes session),
+ * all concurrent 401 requests MUST share the same in-flight refresh promise!
+ */
+export async function requestTokenRefresh(overrideRefreshToken?: string): Promise<AuthTokens> {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  const refreshToken = overrideRefreshToken || getRefreshToken();
+  if (!refreshToken) {
+    clearStoredTokens();
+    throw new ApiAuthError('جلسة التجديد منتهية أو غير صالحة.', 'Refresh token missing.', 'no_refresh_token', 401);
+  }
+
+  refreshPromise = (async () => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/api/v1/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      const nextTokens = await handleResponse<AuthTokens>(res);
+      setStoredTokens(nextTokens);
+      return nextTokens;
+    } catch (err) {
+      clearStoredTokens();
+      throw err;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
+/**
+ * Universal authenticated fetch wrapper.
+ * 1. Attaches Authorization: Bearer <token>.
+ * 2. Proactively refreshes if token is expired or close to expiring (within 60s).
+ * 3. Intercepts 401 responses, executes single-flight token rotation, and replays the request once.
+ */
+export async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
+  let token = getAccessToken();
+  const refreshToken = getRefreshToken();
+
+  // Proactive refresh if access token expired but we have a valid refresh token
+  if ((!token || isAccessTokenExpired()) && refreshToken) {
+    try {
+      const refreshed = await requestTokenRefresh();
+      token = refreshed.access_token;
+    } catch {
+      // Proactive refresh failed; proceed and let server respond
+    }
+  }
+
+  const buildHeaders = (authToken: string | null): Record<string, string> => {
+    const h: Record<string, string> = {};
+    if (options.headers instanceof Headers) {
+      options.headers.forEach((v, k) => { h[k] = v; });
+    } else if (Array.isArray(options.headers)) {
+      options.headers.forEach(([k, v]) => { h[k] = v; });
+    } else if (options.headers && typeof options.headers === 'object') {
+      Object.assign(h, options.headers);
+    }
+
+    if (authToken && !h['Authorization'] && !h['authorization']) {
+      h['Authorization'] = `Bearer ${authToken}`;
+    }
+    if (!h['Content-Type'] && !h['content-type'] && !(options.body instanceof FormData)) {
+      h['Content-Type'] = 'application/json';
+    }
+    return h;
+  };
+
+  let res = await fetch(url, {
+    ...options,
+    headers: buildHeaders(token),
+  });
+
+  // If 401 Unauthorized, attempt rotation and retry once
+  if (res.status === 401 && getRefreshToken()) {
+    try {
+      const refreshed = await requestTokenRefresh();
+      res = await fetch(url, {
+        ...options,
+        headers: buildHeaders(refreshed.access_token),
+      });
+    } catch {
+      // Refresh failed; return original 401 response
+      return res;
+    }
+  }
+
+  return res;
+}
+
 const DEFAULT_BASE_URL = 'https://yar-odoo.samaalrosha.com';
 
 export function getApiBaseUrl(): string {
-  // In browser/dev, VITE_API_BASE_URL is intentionally '' (empty) so all /api/* requests
-  // go through the Vite proxy (dev) or SSR proxy (prod) → avoids CORS preflight rejection.
-  // We MUST check for undefined explicitly: empty string '' is a valid "use proxy" signal.
+  // In Node/Vitest test environments, relative URLs cause undici fetch errors.
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') {
+    return DEFAULT_BASE_URL;
+  }
+  if (typeof window === 'undefined') {
+    return DEFAULT_BASE_URL;
+  }
   const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as ImportMeta & { env?: Record<string, string> }).env : undefined;
   const envVal = metaEnv?.VITE_API_BASE_URL;
   return envVal !== undefined ? envVal : DEFAULT_BASE_URL;
@@ -168,6 +300,10 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return envelope.data as T;
 }
 
+let mePromise: Promise<YarUser> | null = null;
+let cachedMeUser: YarUser | null = null;
+let lastMeTime = 0;
+
 export const authApi = {
   /**
    * API 004 | JWT login for admin, employee or customer | تسجيل الدخول وإصدار JWT
@@ -190,36 +326,49 @@ export const authApi = {
    * API 012 | Read authenticated user role | بيانات المستخدم الحالي
    * GET /api/v1/auth/me
    */
-  async getMe(overrideToken?: string): Promise<YarUser> {
-    const token = overrideToken || getAccessToken();
-    if (!token) {
-      throw new ApiAuthError('رمز المصادقة غير متوفر.', 'Authentication token missing.', 'no_token', 401);
+  async getMe(overrideToken?: string, force = false): Promise<YarUser> {
+    if (!overrideToken && !force && cachedMeUser && (Date.now() - lastMeTime < 30000)) {
+      return cachedMeUser;
     }
 
-    const baseUrl = getApiBaseUrl();
-    let res = await fetch(`${baseUrl}/api/v1/auth/me`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    if (!overrideToken && mePromise) {
+      return mePromise;
+    }
 
-    // If access token expired (401), try to refresh token automatically
-    if (res.status === 401 && !overrideToken) {
-      const refreshed = await this.refreshToken().catch(() => null);
-      if (refreshed) {
-        res = await fetch(`${baseUrl}/api/v1/auth/me`, {
+    const run = async (): Promise<YarUser> => {
+      const baseUrl = getApiBaseUrl();
+      const url = `${baseUrl}/api/v1/auth/me`;
+      let res: Response;
+
+      if (overrideToken) {
+        res = await fetch(url, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${refreshed.access_token}`,
+            Authorization: `Bearer ${overrideToken}`,
           },
         });
+      } else {
+        res = await fetchWithAuth(url, {
+          method: 'GET',
+        });
       }
+
+      const user = await handleResponse<YarUser>(res);
+      cachedMeUser = user;
+      lastMeTime = Date.now();
+      return user;
+    };
+
+    if (overrideToken) {
+      return run();
     }
 
-    return await handleResponse<YarUser>(res);
+    mePromise = run().finally(() => {
+      mePromise = null;
+    });
+
+    return mePromise;
   },
 
   /**
@@ -227,39 +376,19 @@ export const authApi = {
    * POST /api/v1/auth/refresh
    */
   async refreshToken(overrideRefreshToken?: string): Promise<AuthTokens> {
-    const refreshToken = overrideRefreshToken || getRefreshToken();
-    if (!refreshToken) {
-      clearStoredTokens();
-      throw new ApiAuthError('جلسة التجديد منتهية أو غير صالحة.', 'Refresh token missing.', 'no_refresh_token', 401);
-    }
-
-    const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-
-    try {
-      const nextTokens = await handleResponse<AuthTokens>(res);
-      setStoredTokens(nextTokens);
-      return nextTokens;
-    } catch (err) {
-      clearStoredTokens();
-      throw err;
-    }
+    return await requestTokenRefresh(overrideRefreshToken);
   },
 
   /**
    * API 011 | Revoke current JWT session | إنهاء الجلسة
    * POST /api/v1/auth/logout
    */
-  async logout(): Promise<void> {
-    const token = getAccessToken();
+  async logout(overrideToken?: string): Promise<boolean> {
+    const token = overrideToken || getAccessToken();
     const baseUrl = getApiBaseUrl();
 
-    if (token) {
-      try {
+    try {
+      if (token) {
         await fetch(`${baseUrl}/api/v1/auth/logout`, {
           method: 'POST',
           headers: {
@@ -267,12 +396,15 @@ export const authApi = {
             Authorization: `Bearer ${token}`,
           },
         });
-      } catch {
-        // Ignore network errors on logout to ensure local cleanup
       }
+    } catch (err) {
+      // Ensure local cleanup even if network fails
+      console.warn('[Auth] Server logout request failed:', err);
+    } finally {
+      clearStoredTokens();
     }
 
-    clearStoredTokens();
+    return true;
   },
 
   /**
@@ -358,14 +490,9 @@ export const authApi = {
    * POST /api/v1/auth/socket-ticket
    */
   async getSocketTicket(): Promise<GenericDataResponse | null> {
-    const token = getAccessToken();
     const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/auth/socket-ticket`, {
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/auth/socket-ticket`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
     });
     return await handleResponse<GenericDataResponse | null>(res);
   },

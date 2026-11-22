@@ -4,6 +4,7 @@ export interface Notification {id:string;recipientId:string;type:string;title:st
 export const ACCOUNT_KEY:string;
 export function hashPassword(password:string,salt?:string|Uint8Array):Promise<{salt:string;hash:string}>;
 export function login(identifier:string,password:string):Promise<Account|null>;
+export function syncUserSession(apiUser: unknown): Account | null;
 export function logout():void;
 export function currentAccount():Account|null;
 export function saveUser(input:Partial<Account>,password?:string,confirmation?:string):Promise<Account>;
