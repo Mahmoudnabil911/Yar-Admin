@@ -18,11 +18,36 @@ import { getApiBaseUrl, getAccessToken, ApiAuthError } from './authApi';
 export interface AdminHotelItem {
   id: number;
   name: string;
-  city?: string;
-  country?: string;
+  city?: string | false;
+  country?: string | false;
+  address?: string | false;
+  description?: string | false;
   stars?: number;
+  facilities?: Record<string, unknown> | false;
+  gallery?: Record<string, unknown> | false;
+  check_in_time?: string | false;
+  check_out_time?: string | false;
+  cancellation_policy?: string | false;
   active?: boolean;
   published?: boolean;
+  supplier_id?: number | false;
+  [key: string]: unknown;
+}
+
+export interface AdminRoomItem {
+  id: number;
+  hotel_id: number;
+  name: string;
+  code?: string | false;
+  description?: string | false;
+  view_type?: string | false;
+  beds?: string | false;
+  occupancy?: number;
+  units_total?: number;
+  amenities?: Record<string, unknown> | false;
+  gallery?: Record<string, unknown> | false;
+  cancellation_policy?: string | false;
+  active?: boolean;
   [key: string]: unknown;
 }
 
@@ -30,9 +55,14 @@ export interface AdminRoomRateItem {
   id: number;
   room_id?: number;
   name?: string;
-  meal_plan?: string;
+  date_from?: string | false;
+  date_to?: string | false;
+  meal_plan?: string | false;
   price_usd?: number;
   supplier_cost_usd?: number;
+  refundability?: string | false;
+  cancellation_policy?: string | false;
+  min_stay_nights?: number | string | false;
   active?: boolean;
   hotel_name?: string;
   [key: string]: unknown;
@@ -108,50 +138,118 @@ export const catalogAdminApi = {
   },
 
   /**
-   * API 070 | إنشاء فندق جديد
+   * API 070 | إنشاء الفنادق | POST /api/v1/admin/hotels
    */
-  async createHotel(payload: { name: string; city?: string; country?: string; stars?: number }): Promise<AdminHotelItem> {
+  async createHotel(payload: {
+    name: string;
+    city?: string;
+    country?: string;
+    address?: string;
+    description?: string;
+    stars?: number;
+    facilities?: Record<string, unknown>;
+    gallery?: Record<string, unknown>;
+    check_in_time?: string;
+    check_out_time?: string;
+    cancellation_policy?: string;
+    published?: boolean;
+    active?: boolean;
+    supplier_id?: number;
+  }): Promise<AdminHotelItem> {
     const baseUrl = getApiBaseUrl();
+    const body: Record<string, unknown> = {
+      name: payload.name,
+      active: payload.active !== undefined ? payload.active : true,
+      published: payload.published !== undefined ? payload.published : true,
+    };
+    if (payload.city) body.city = payload.city;
+    if (payload.country) body.country = payload.country;
+    if (payload.address) body.address = payload.address;
+    if (payload.description) body.description = payload.description;
+    if (payload.stars !== undefined) body.stars = payload.stars;
+    if (payload.facilities) body.facilities = payload.facilities;
+    if (payload.gallery) body.gallery = payload.gallery;
+    if (payload.check_in_time) body.check_in_time = payload.check_in_time;
+    if (payload.check_out_time) body.check_out_time = payload.check_out_time;
+    if (payload.cancellation_policy) body.cancellation_policy = payload.cancellation_policy;
+    if (payload.supplier_id) body.supplier_id = payload.supplier_id;
+
     const res = await fetch(`${baseUrl}/api/v1/admin/hotels`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({
-        ...payload,
-        active: true,
-        published: true,
-      }),
+      body: JSON.stringify(body),
     });
     const data = await handleResponse<{ id: number } | number>(res, 'فشل إنشاء الفندق على الخادم.');
     const id = typeof data === 'object' && data !== null && 'id' in data ? data.id : (data as number);
-    return { ...payload, id, active: true, published: true };
+    return { ...payload, id, active: body.active as boolean, published: body.published as boolean };
   },
 
   /**
-   * API 072 | عرض الغرف
+   * API 071 | تعديل الفنادق | PATCH /api/v1/admin/hotels/{record_id}
    */
-  async getRooms(): Promise<{ items: Array<{ id: number; hotel_id: number; name: string }> }> {
+  async updateHotel(recordId: number, payload: Partial<AdminHotelItem>): Promise<{ id: number }> {
     const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/admin/rooms`, {
+    const res = await fetch(`${baseUrl}/api/v1/admin/hotels/${recordId}`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse<{ id: number }>(res, 'فشل تعديل بيانات الفندق على الخادم.');
+  },
+
+  /**
+   * API 072 | عرض غرف الفنادق | GET /api/v1/admin/rooms
+   */
+  async getRooms(params?: { hotel_id?: number }): Promise<{ items: AdminRoomItem[] }> {
+    const baseUrl = getApiBaseUrl();
+    let url = `${baseUrl}/api/v1/admin/rooms`;
+    if (params?.hotel_id) {
+      url += `?hotel_id=${encodeURIComponent(String(params.hotel_id))}`;
+    }
+    const res = await fetch(url, {
       method: 'GET',
       headers: getAuthHeaders(),
     });
-    return await handleResponse<{ items: Array<{ id: number; hotel_id: number; name: string }> }>(res, 'فشل جلب الغرف.');
+    return await handleResponse<{ items: AdminRoomItem[] }>(res, 'فشل جلب الغرف.');
   },
 
   /**
-   * API 073 | إنشاء غرفة لفندق
+   * API 073 | إنشاء غرف الفنادق | POST /api/v1/admin/rooms
    */
-  async createRoom(payload: { hotel_id: number; name: string; units_total?: number; occupancy?: number }): Promise<{ id: number; hotel_id: number; name: string }> {
+  async createRoom(payload: {
+    hotel_id: number;
+    name: string;
+    code?: string;
+    description?: string;
+    view_type?: string;
+    beds?: string;
+    occupancy?: number;
+    units_total?: number;
+    amenities?: Record<string, unknown>;
+    gallery?: Record<string, unknown>;
+    cancellation_policy?: string;
+    active?: boolean;
+  }): Promise<AdminRoomItem> {
     const baseUrl = getApiBaseUrl();
+    const body: Record<string, unknown> = {
+      hotel_id: payload.hotel_id,
+      name: payload.name,
+      units_total: payload.units_total || 10,
+      occupancy: payload.occupancy || 2,
+      active: payload.active !== undefined ? payload.active : true,
+    };
+    if (payload.code) body.code = payload.code;
+    if (payload.description) body.description = payload.description;
+    if (payload.view_type) body.view_type = payload.view_type;
+    if (payload.beds) body.beds = payload.beds;
+    if (payload.amenities) body.amenities = payload.amenities;
+    if (payload.gallery) body.gallery = payload.gallery;
+    if (payload.cancellation_policy) body.cancellation_policy = payload.cancellation_policy;
+
     const res = await fetch(`${baseUrl}/api/v1/admin/rooms`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({
-        ...payload,
-        units_total: payload.units_total || 10,
-        occupancy: payload.occupancy || 2,
-        active: true,
-      }),
+      body: JSON.stringify(body),
     });
     const data = await handleResponse<{ id: number } | number>(res, 'فشل إنشاء الغرفة على الخادم.');
     const id = typeof data === 'object' && data !== null && 'id' in data ? data.id : (data as number);
@@ -159,11 +257,28 @@ export const catalogAdminApi = {
   },
 
   /**
-   * API 075 | عرض أسعار وتوافر الغرف
+   * API 074 | تعديل غرف الفنادق | PATCH /api/v1/admin/rooms/{record_id}
    */
-  async getRoomRates(): Promise<{ items: AdminRoomRateItem[] }> {
+  async updateRoom(recordId: number, payload: Partial<AdminRoomItem>): Promise<{ id: number }> {
     const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/admin/room-rates`, {
+    const res = await fetch(`${baseUrl}/api/v1/admin/rooms/${recordId}`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse<{ id: number }>(res, 'فشل تعديل بيانات الغرفة على الخادم.');
+  },
+
+  /**
+   * API 075 | عرض أسعار وتوافر الغرف | GET /api/v1/admin/room-rates
+   */
+  async getRoomRates(params?: { room_id?: number }): Promise<{ items: AdminRoomRateItem[] }> {
+    const baseUrl = getApiBaseUrl();
+    let url = `${baseUrl}/api/v1/admin/room-rates`;
+    if (params?.room_id) {
+      url += `?room_id=${encodeURIComponent(String(params.room_id))}`;
+    }
+    const res = await fetch(url, {
       method: 'GET',
       headers: getAuthHeaders(),
     });
@@ -171,27 +286,57 @@ export const catalogAdminApi = {
   },
 
   /**
-   * API 076 | إنشاء باقة سعر للغرفة
+   * API 076 | إنشاء أسعار وتوافر الغرف | POST /api/v1/admin/room-rates
    */
   async createRoomRate(payload: {
     room_id: number;
     name: string;
+    date_from?: string;
+    date_to?: string;
     meal_plan?: string;
     price_usd: number;
     supplier_cost_usd?: number;
+    refundability?: string;
+    cancellation_policy?: string;
+    min_stay_nights?: number | string;
+    active?: boolean;
   }): Promise<AdminRoomRateItem> {
     const baseUrl = getApiBaseUrl();
+    const body: Record<string, unknown> = {
+      room_id: payload.room_id,
+      name: payload.name,
+      price_usd: payload.price_usd,
+      active: payload.active !== undefined ? payload.active : true,
+    };
+    if (payload.date_from) body.date_from = payload.date_from;
+    if (payload.date_to) body.date_to = payload.date_to;
+    if (payload.meal_plan) body.meal_plan = payload.meal_plan;
+    if (payload.supplier_cost_usd !== undefined) body.supplier_cost_usd = payload.supplier_cost_usd;
+    if (payload.refundability) body.refundability = payload.refundability;
+    if (payload.cancellation_policy) body.cancellation_policy = payload.cancellation_policy;
+    if (payload.min_stay_nights !== undefined) body.min_stay_nights = payload.min_stay_nights;
+
     const res = await fetch(`${baseUrl}/api/v1/admin/room-rates`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({
-        ...payload,
-        active: true,
-      }),
+      body: JSON.stringify(body),
     });
     const data = await handleResponse<{ id: number } | number>(res, 'فشل إنشاء سعر الغرفة على الخادم.');
     const id = typeof data === 'object' && data !== null && 'id' in data ? data.id : (data as number);
-    return { ...payload, id, active: true };
+    return { ...payload, id, active: body.active as boolean };
+  },
+
+  /**
+   * API 077 | تعديل أسعار وتوافر الغرف | PATCH /api/v1/admin/room-rates/{record_id}
+   */
+  async updateRoomRate(recordId: number, payload: Partial<AdminRoomRateItem>): Promise<{ id: number }> {
+    const baseUrl = getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/api/v1/admin/room-rates/${recordId}`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse<{ id: number }>(res, 'فشل تعديل سعر الغرفة على الخادم.');
   },
 
   /**
