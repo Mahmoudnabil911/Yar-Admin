@@ -21,13 +21,24 @@ export function formatInternationalPhone(countryCode, input) {
 }
 
 export default function LoginScreen({ initialMode }) {
-  const t = useWords(), { lang } = usePrefs();
+  const t = useWords(),
+    { lang } = usePrefs();
+
+  // If user is already authenticated with an active session, redirect straight to dashboard
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const activeUser = auth.get();
+      if (activeUser && activeUser.status === 'active') {
+        window.location.replace('/dashboard');
+      }
+    }
+  }, []);
 
   // Initial mode from prop, URL query or path if present
-  const isRegisterInitial = typeof window !== 'undefined' && (
-    window.location.pathname === '/register' ||
-    new URLSearchParams(window.location.search).get('mode') === 'register'
-  );
+  const isRegisterInitial =
+    typeof window !== 'undefined' &&
+    (window.location.pathname === '/register' ||
+      new URLSearchParams(window.location.search).get('mode') === 'register');
 
   const [mode, setMode] = useState(initialMode || (isRegisterInitial ? 'register' : 'login')); // 'login' | 'register' | 'verify_otp' | 'forgot'
 
@@ -42,7 +53,7 @@ export default function LoginScreen({ initialMode }) {
     }
   }, [initialMode]);
   const [identifier, setIdentifier] = useState(
-    (typeof localStorage !== 'undefined' && localStorage.getItem('YAR_ADMIN_REMEMBER_PHONE')) || ''
+    (typeof localStorage !== 'undefined' && localStorage.getItem('YAR_ADMIN_REMEMBER_PHONE')) || '',
   );
   const [countryCode, setCountryCode] = useState('+964');
   const [name, setName] = useState('');
@@ -100,7 +111,7 @@ export default function LoginScreen({ initialMode }) {
       } else {
         localStorage.removeItem('YAR_ADMIN_REMEMBER_PHONE');
       }
-      window.location.assign('/dashboard');
+      window.location.replace('/dashboard');
     } catch (err) {
       setError(errorText(err, lang));
     } finally {
@@ -115,7 +126,12 @@ export default function LoginScreen({ initialMode }) {
     setStatusMsg('');
 
     if (password.length < 12 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-      setError(t('يجب أن تتكون كلمة المرور من 12 خانة على الأقل، وتحتوي على أحرف وأرقام.', 'Password must be at least 12 characters and include letters and numbers.'));
+      setError(
+        t(
+          'يجب أن تتكون كلمة المرور من 12 خانة على الأقل، وتحتوي على أحرف وأرقام.',
+          'Password must be at least 12 characters and include letters and numbers.',
+        ),
+      );
       return;
     }
     if (password !== confirmPassword) {
@@ -133,7 +149,12 @@ export default function LoginScreen({ initialMode }) {
         email: email.trim() || undefined,
       });
       setIdentifier(formattedPhone);
-      setStatusMsg(t('تم إرسال رمز التحقق إلى واتساب بنجاح.', 'Verification code sent to WhatsApp successfully.'));
+      setStatusMsg(
+        t(
+          'تم إرسال رمز التحقق إلى واتساب بنجاح.',
+          'Verification code sent to WhatsApp successfully.',
+        ),
+      );
       setCountdown(60);
       setMode('verify_otp');
     } catch (err) {
@@ -151,13 +172,23 @@ export default function LoginScreen({ initialMode }) {
     try {
       const formattedPhone = formatInternationalPhone(countryCode, identifier);
       await authApi.verifyOtp(formattedPhone, otpCode.trim());
-      setStatusMsg(t('تم تفعيل الحساب بنجاح! جاري تسجيل الدخول...', 'Account activated successfully! Signing in...'));
+      setStatusMsg(
+        t(
+          'تم تفعيل الحساب بنجاح! جاري تسجيل الدخول...',
+          'Account activated successfully! Signing in...',
+        ),
+      );
       try {
         await auth.signIn(formattedPhone, password);
-        window.location.assign('/dashboard');
+        window.location.replace('/dashboard');
       } catch {
         setMode('login');
-        setStatusMsg(t('تم تفعيل الحساب بنجاح. يمكنك الآن تسجيل الدخول.', 'Account activated successfully. You can now sign in.'));
+        setStatusMsg(
+          t(
+            'تم تفعيل الحساب بنجاح. يمكنك الآن تسجيل الدخول.',
+            'Account activated successfully. You can now sign in.',
+          ),
+        );
       }
     } catch (err) {
       setError(errorText(err, lang));
@@ -173,7 +204,9 @@ export default function LoginScreen({ initialMode }) {
     try {
       const formattedPhone = formatInternationalPhone(countryCode, identifier);
       await authApi.requestOtp(formattedPhone);
-      setStatusMsg(t('تمت إعادة إرسال رمز التحقق بنجاح.', 'Verification code resent successfully.'));
+      setStatusMsg(
+        t('تمت إعادة إرسال رمز التحقق بنجاح.', 'Verification code resent successfully.'),
+      );
       setCountdown(60);
     } catch (err) {
       setError(errorText(err, lang));
@@ -193,8 +226,8 @@ export default function LoginScreen({ initialMode }) {
       setStatusMsg(
         t(
           'إذا كان الرقم مرتبطًا بحساب، فقد تم إرسال طلب إعادة التعيين.',
-          'If this number is associated with an account, a reset request has been processed.'
-        )
+          'If this number is associated with an account, a reset request has been processed.',
+        ),
       );
     } catch (err) {
       setError(errorText(err, lang));
@@ -211,39 +244,72 @@ export default function LoginScreen({ initialMode }) {
       {mode === 'login' && (
         <>
           <h1>{t('تسجيل الدخول', 'Sign In')}</h1>
-          <p>{t('أدخل اسم المستخدم أو رقم الهاتف وكلمة المرور للوصول إلى لوحة التحكم', 'Enter your username or mobile number and password to access the dashboard.')}</p>
+          <p>
+            {t(
+              'أدخل اسم المستخدم أو رقم الهاتف وكلمة المرور للوصول إلى لوحة التحكم',
+              'Enter your username or mobile number and password to access the dashboard.',
+            )}
+          </p>
         </>
       )}
 
       {mode === 'register' && (
         <>
           <h1>{t('إنشاء حساب جديد', 'Create an Account')}</h1>
-          <p>{t('أدخل بياناتك للتسجيل وسنرسل رمز التحقق عبر واتساب', 'Enter your details to register; an OTP will be sent via WhatsApp')}</p>
+          <p>
+            {t(
+              'أدخل بياناتك للتسجيل وسنرسل رمز التحقق عبر واتساب',
+              'Enter your details to register; an OTP will be sent via WhatsApp',
+            )}
+          </p>
         </>
       )}
 
       {mode === 'verify_otp' && (
         <>
           <h1>{t('تأكيد وتفعيل الحساب', 'Verify & Activate Account')}</h1>
-          <p>{t('أدخل رمز التحقق (OTP) المكوّن من 6 أرقام المرسل عبر واتساب', 'Enter the 6-digit verification code sent via WhatsApp')}</p>
+          <p>
+            {t(
+              'أدخل رمز التحقق (OTP) المكوّن من 6 أرقام المرسل عبر واتساب',
+              'Enter the 6-digit verification code sent via WhatsApp',
+            )}
+          </p>
         </>
       )}
 
       {mode === 'forgot' && (
         <>
           <h1>{t('نسيت كلمة المرور؟', 'Forgot Your Password?')}</h1>
-          <p>{t('أدخل رقم الهاتف المرتبط بحسابك لإرسال طلب إعادة تعيين كلمة المرور', 'Enter the mobile number associated with your account to submit a password reset request')}</p>
+          <p>
+            {t(
+              'أدخل رقم الهاتف المرتبط بحسابك لإرسال طلب إعادة تعيين كلمة المرور',
+              'Enter the mobile number associated with your account to submit a password reset request',
+            )}
+          </p>
         </>
       )}
 
       {/* Status & Error messages */}
       {statusMsg && (
-        <p role="status" style={{ color: 'var(--public-gold)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <p
+          role="status"
+          style={{
+            color: 'var(--public-gold)',
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
           <CheckCircle2 size={16} />
           {statusMsg}
         </p>
       )}
-      {error && <p role="alert" style={{ color: 'var(--destructive)', margin: '8px 0' }}>{error}</p>}
+      {error && (
+        <p role="alert" style={{ color: 'var(--destructive)', margin: '8px 0' }}>
+          {error}
+        </p>
+      )}
 
       {/* Forms */}
       {mode === 'login' && (
@@ -268,7 +334,11 @@ export default function LoginScreen({ initialMode }) {
               variant="ghost"
               size="icon"
               type="button"
-              aria-label={show ? t('إخفاء كلمة المرور', 'Hide Password') : t('إظهار كلمة المرور', 'Show Password')}
+              aria-label={
+                show
+                  ? t('إخفاء كلمة المرور', 'Hide Password')
+                  : t('إظهار كلمة المرور', 'Show Password')
+              }
               onClick={() => setShow(!show)}
             >
               {show ? <EyeOff /> : <Eye />}
@@ -323,17 +393,17 @@ export default function LoginScreen({ initialMode }) {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
-            <Button
-              variant="ghost"
-              size="icon"
-              type="button"
-              onClick={() => setShow(!show)}
-            >
+            <Button variant="ghost" size="icon" type="button" onClick={() => setShow(!show)}>
               {show ? <EyeOff /> : <Eye />}
             </Button>
           </div>
-          <small style={{ color: 'var(--muted-foreground)', fontSize: '11px', marginBlockStart: '-8px' }}>
-            {t('يجب أن تتكون كلمة المرور من 12 خانة على الأقل وتتضمن أحرفاً وأرقاماً.', 'Must be at least 12 characters and include letters and numbers.')}
+          <small
+            style={{ color: 'var(--muted-foreground)', fontSize: '11px', marginBlockStart: '-8px' }}
+          >
+            {t(
+              'يجب أن تتكون كلمة المرور من 12 خانة على الأقل وتتضمن أحرفاً وأرقاماً.',
+              'Must be at least 12 characters and include letters and numbers.',
+            )}
           </small>
           <Field
             label={t('تأكيد كلمة المرور', 'Confirm Password')}
@@ -344,7 +414,9 @@ export default function LoginScreen({ initialMode }) {
             required
           />
           <Button disabled={busy} type="submit">
-            {busy ? t('جاري المعالجة…', 'Processing…') : t('إنشاء الحساب والمتابعة', 'Register & Proceed')}
+            {busy
+              ? t('جاري المعالجة…', 'Processing…')
+              : t('إنشاء الحساب والمتابعة', 'Register & Proceed')}
             <ArrowUpRight />
           </Button>
         </form>
@@ -373,7 +445,7 @@ export default function LoginScreen({ initialMode }) {
             {countdown > 0
               ? t(
                   `إعادة إرسال رمز التحقق (${countdown} ثانية)`,
-                  `Resend verification code (${countdown}s)`
+                  `Resend verification code (${countdown}s)`,
                 )
               : t('إعادة إرسال رمز التحقق', 'Resend Verification Code')}
           </Button>
