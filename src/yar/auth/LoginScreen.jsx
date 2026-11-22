@@ -50,11 +50,27 @@ export default function LoginScreen({ initialMode }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [otpCode, setOtpCode] = useState('');
+  const [countdown, setCountdown] = useState(0);
   const [show, setShow] = useState(false);
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // 60-second cooldown timer for WhatsApp OTP resend
+  useEffect(() => {
+    if (mode === 'verify_otp' && countdown === 0) {
+      setCountdown(60);
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setInterval(() => {
+      setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
 
   function resetState() {
     setError('');
@@ -118,6 +134,7 @@ export default function LoginScreen({ initialMode }) {
       });
       setIdentifier(formattedPhone);
       setStatusMsg(t('تم إرسال رمز التحقق إلى واتساب بنجاح.', 'Verification code sent to WhatsApp successfully.'));
+      setCountdown(60);
       setMode('verify_otp');
     } catch (err) {
       setError(errorText(err, lang));
@@ -150,12 +167,14 @@ export default function LoginScreen({ initialMode }) {
   }
 
   async function handleResendOtp() {
+    if (countdown > 0 || busy) return;
     setError('');
     setBusy(true);
     try {
       const formattedPhone = formatInternationalPhone(countryCode, identifier);
       await authApi.requestOtp(formattedPhone);
       setStatusMsg(t('تمت إعادة إرسال رمز التحقق بنجاح.', 'Verification code resent successfully.'));
+      setCountdown(60);
     } catch (err) {
       setError(errorText(err, lang));
     } finally {
@@ -348,10 +367,15 @@ export default function LoginScreen({ initialMode }) {
           <Button
             variant="outline"
             type="button"
-            disabled={busy}
+            disabled={busy || countdown > 0}
             onClick={handleResendOtp}
           >
-            {t('إعادة إرسال رمز التحقق', 'Resend Verification Code')}
+            {countdown > 0
+              ? t(
+                  `إعادة إرسال رمز التحقق (${countdown} ثانية)`,
+                  `Resend verification code (${countdown}s)`
+                )
+              : t('إعادة إرسال رمز التحقق', 'Resend Verification Code')}
           </Button>
         </form>
       )}
