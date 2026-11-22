@@ -34,6 +34,7 @@ export default function LoginScreen({ initialMode }) {
   const [identifier, setIdentifier] = useState(
     (typeof localStorage !== 'undefined' && localStorage.getItem('YAR_ADMIN_REMEMBER_PHONE')) || ''
   );
+  const [countryCode, setCountryCode] = useState('+964');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -98,9 +99,11 @@ export default function LoginScreen({ initialMode }) {
 
     setBusy(true);
     try {
+      const rawPhone = identifier.trim();
+      const formattedPhone = rawPhone.startsWith('+') ? rawPhone : `${countryCode} ${rawPhone}`;
       await authApi.register({
         name: name.trim(),
-        phone: identifier.trim(),
+        phone: formattedPhone,
         password,
         email: email.trim() || undefined,
       });
@@ -154,7 +157,9 @@ export default function LoginScreen({ initialMode }) {
     setStatusMsg('');
     setBusy(true);
     try {
-      await requestReset(identifier);
+      const rawPhone = identifier.trim();
+      const formattedPhone = rawPhone.startsWith('+') ? rawPhone : `${countryCode} ${rawPhone}`;
+      await requestReset(formattedPhone);
       setStatusMsg(
         t(
           'إذا كان الرقم مرتبطًا بحساب، فقد تم إرسال طلب إعادة التعيين.',
@@ -267,6 +272,9 @@ export default function LoginScreen({ initialMode }) {
             label={t('رقم الهاتف (مع الرمز الدولي)', 'Phone Number')}
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
+            country={countryCode}
+            onCountryChange={setCountryCode}
+            lang={lang}
             required
           />
           <Field
@@ -340,6 +348,9 @@ export default function LoginScreen({ initialMode }) {
             label={t('رقم الهاتف', 'Mobile Number')}
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
+            country={countryCode}
+            onCountryChange={setCountryCode}
+            lang={lang}
             required
           />
           <Button disabled={busy} type="submit">
