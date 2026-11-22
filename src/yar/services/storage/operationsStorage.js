@@ -5,6 +5,8 @@ import { operationsModel as M, supplierCreditModel as C, finalDemo as YARFinalDe
 import { catalogStorage } from './catalogStorage';
 import { fxStorage } from './fxStorage';
 import { usdToIqd } from '../fxRate';
+import { bookingsApi } from '../api/bookingsApi';
+import { getAccessToken } from '../api/authApi';
 
 const STORAGE = 'YAR_ADMIN_OPERATIONS_V1';
 const clone = v => JSON.parse(JSON.stringify(v));
@@ -282,6 +284,30 @@ class OperationsStorage {
 
   csv(rows) {
     return M.csv(rows);
+  }
+
+  async syncFromBackend() {
+    try {
+      const res = await bookingsApi.listBookings({ limit: 100 });
+      if (res && Array.isArray(res.items)) {
+        this.ensure();
+        const mapped = res.items.map(r => bookingsApi.mapRecordToRow(r));
+        if (getAccessToken()) {
+          this.records = mapped;
+        } else if (mapped.length > 0) {
+          const map = new Map(this.records.map(r => [r.id, r]));
+          for (const item of mapped) {
+            map.set(item.id, { ...(map.get(item.id) || {}), ...item });
+          }
+          this.records = Array.from(map.values());
+        }
+        this.notify();
+      }
+      return res;
+    } catch (err) {
+      // offline / mock fallback
+      return null;
+    }
   }
 }
 

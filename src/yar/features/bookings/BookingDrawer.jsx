@@ -8,6 +8,7 @@ import { operationsModel as M, supplierCreditModel as C } from '../../services/m
 import { useToast } from '../../components/ui/Toast';
 import { useConfirm } from '../../components/ui/ConfirmDialog';
 import HotelOfferSnapshot from '../hotels/HotelOfferSnapshot';
+import { bookingsApi } from '../../services/api/bookingsApi';
 
 const serviceSchemas = {
   flight: { origin: 'مدينة المغادرة', destination: 'مدينة الوصول', carrier: 'شركة الطيران', cabin: 'درجة السفر', travelDate: 'تاريخ الذهاب', returnDate: 'تاريخ العودة (اختياري)' },
@@ -141,6 +142,11 @@ export function BookingDrawer({ bookingId, onOpenFinance, onNavigate }) {
           reason: transitionReason,
           confirmPaidCancellation: cancellationAck
         });
+        if (targetStatus === 'cancelled') {
+          bookingsApi.cancelBooking(booking.rawId || booking.id, transitionReason).catch(err => {
+            console.warn('Odoo booking cancel note:', err.message);
+          });
+        }
         toast(`تم تغيير حالة الطلب إلى ${M.statuses[targetStatus] || targetStatus}.`);
       }
     } catch (err) {
@@ -154,6 +160,11 @@ export function BookingDrawer({ bookingId, onOpenFinance, onNavigate }) {
     try {
       if (assignedId !== booking.assignedId) {
         operationsStorage.assignStaff(booking.id, assignedId);
+        if (Number.isInteger(Number(assignedId))) {
+          bookingsApi.assignBooking(booking.rawId || booking.id, Number(assignedId)).catch(err => {
+            console.warn('Odoo booking assign note:', err.message);
+          });
+        }
       }
       if (followupNote.trim()) {
         operationsStorage.addNote(booking.id, followupNote.trim());

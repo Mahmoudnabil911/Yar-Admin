@@ -21,10 +21,18 @@ const snap = () => `${tick}|${fxStorage.today()}`;
 export function useFxRate() {
   const key = useSyncExternalStore(subscribe, snap, () => 'ssr');
   const [state, setState] = useState(() => ({ today: fxStorage.today(), rate: fxStorage.todayRate(), latest: fxStorage.latest() }));
+
+  // Sync once on initial mount only
+  useEffect(() => {
+    fxStorage.syncFromBackend?.();
+  }, []);
+
+  // Update local view when storage key changes
   useEffect(() => {
     setState({ today: fxStorage.today(), rate: fxStorage.todayRate(), latest: fxStorage.latest() });
     fxStorage.checkReminder();
   }, [key]);
+
   return state;
 }
 

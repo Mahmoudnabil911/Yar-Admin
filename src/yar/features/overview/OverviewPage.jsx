@@ -7,6 +7,7 @@ import { catalogStorage } from '../../services/storage/catalogStorage';
 import { operationsModel as M, mockData } from '../../services/models';
 import { can } from '../../auth/access';
 import { useSession } from '../../auth/useSession';
+import { reportsApi } from '../../services/api/reportsApi';
 
 export function OverviewPage({ onNavigate, onOpenBooking, searchQuery = '' }) {
   const session = useSession();
@@ -30,6 +31,11 @@ export function OverviewPage({ onNavigate, onOpenBooking, searchQuery = '' }) {
   // Subscribe to storage updates
   const [bookings, setBookings] = useState(() => operationsStorage.getBookings());
   const [providers, setProviders] = useState(() => catalogStorage.getRecords('providers'));
+  const [liveSummary, setLiveSummary] = useState(null);
+
+  useEffect(() => {
+    reportsApi.getDashboardSummary().then(setLiveSummary).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const unsubOps = operationsStorage.subscribe(() => {
@@ -400,7 +406,7 @@ export function OverviewPage({ onNavigate, onOpenBooking, searchQuery = '' }) {
         </button>
       </section>
 
-      {isAdmin && <ManagementKpis bookings={bookings} />}
+      {isAdmin && <ManagementKpis bookings={bookings} liveSummary={liveSummary} />}
 
       <div className="workspace-grid">
         <section className="panel bookings-panel" aria-labelledby="bookings-title">
@@ -774,7 +780,7 @@ export default OverviewPage;
 
 
 /** Admin-only profitability & internal cost (from saved price snapshots; currencies never summed). */
-function ManagementKpis({ bookings }) {
+function ManagementKpis({ bookings, liveSummary }) {
   const totals = useMemo(() => {
     const out = {};
     for (const b of bookings) {
@@ -785,8 +791,12 @@ function ManagementKpis({ bookings }) {
       out[c].cost += Number(b.pricing.cost) || 0;
       out[c].count += 1;
     }
+    if (liveSummary && liveSummary.supplier_cost_total_usd > 0) {
+      out['USD'] = out['USD'] || { margin: 0, cost: 0, count: 0 };
+      out['USD'].cost = liveSummary.supplier_cost_total_usd;
+    }
     return out;
-  }, [bookings]);
+  }, [bookings, liveSummary]);
   const fmt = (v, c) => `${new Intl.NumberFormat('en-US', { maximumFractionDigits: c === 'USD' ? 2 : 0, minimumFractionDigits: c === 'USD' ? 2 : 0 }).format(v)} ${c === 'USD' ? '$' : 'د.ع'}`;
   const currencies = Object.keys(totals).sort();
   return (

@@ -1,471 +1,520 @@
-import React, { useState, useMemo } from 'react';
-import { operationsStorage } from '../../services/storage/operationsStorage';
-import { catalogStorage } from '../../services/storage/catalogStorage';
-import { audienceStorage } from '../../services/storage/audienceStorage';
-import { pricingStorage } from '../../services/storage/pricingStorage';
-import { operationsModel as M, pricingEngine as E } from '../../services/models';
+import React, { useState, useEffect } from 'react';
 import { useToast } from '../../components/ui/Toast';
 import { Drawer } from '../../components/ui/Drawer';
-import HotelOfferPicker from '../hotels/HotelOfferPicker';
-import { useFxRate, FxRateBanner } from '../fx/ExchangeRate';
-import { usdToIqd, iqdToUsd } from '../../services/fxRate';
-
-const serviceSchemas = {
-  flight: { origin: 'مدينة المغادرة', destination: 'مدينة الوصول', carrier: 'شركة الطيران', cabin: 'درجة السفر', travelDate: 'تاريخ الذهاب', returnDate: 'تاريخ العودة (اختياري)' },
-  hotel: { hotelName: 'الفندق', checkIn: 'الوصول', checkOut: 'المغادرة', rooms: 'أنواع الغرف وتوزيع الأشخاص' },
-  package: { packageName: 'اسم الباقة / الفندق', nights: 'عدد الليالي', travelDate: 'تاريخ السفر' },
-  transfer: { vehicle: 'السيارة', pickup: 'نقطة الاستقبال / خدمة الاستقبال والتوديع', travelDate: 'التاريخ', passengers: 'عدد الركاب' },
-  tour: { tourName: 'الجولة', pickup: 'نقطة الانطلاق', travelDate: 'التاريخ', passengers: 'عدد الأشخاص' }
-};
+import { bookingsApi } from '../../services/api/bookingsApi';
+import { catalogAdminApi } from '../../services/api/catalogAdminApi';
 
 export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess }) {
   const isModalOpen = open !== undefined ? Boolean(open) : Boolean(isOpen);
   const toast = useToast();
-  const providers = catalogStorage.getRecords('providers');
-  const customers = audienceStorage.getUsers().users || [];
 
-  const [service, setService] = useState('flight');
-  const [source, setSource] = useState('whatsapp');
+  const [serviceType, setServiceType] = useState('package');
   const [customerId, setCustomerId] = useState('');
-  const [customer, setCustomer] = useState('');
-  const [phone, setPhone] = useState('07XX XXX XX99');
-  const [date, setDate] = useState(() => M.today());
-  // Customer price is always IQD; supplier net is entered in USD and converted with today's admin rate.
-  const currency = 'IQD';
-  const { rate: fx } = useFxRate();
-  const [route, setRoute] = useState('');
-  const [detail, setDetail] = useState('');
-  const [providerId, setProviderId] = useState('');
 
-  // Pricing inputs
-  const [pricingMode, setPricingMode] = useState('manual'); // 'manual' or 'rules'
-  const [cost, setCost] = useState('100'); // supplier net in USD
-  const [markupMode, setMarkupMode] = useState('percent');
-  const [markupValue, setMarkupValue] = useState('10');
-  const [discountMode, setDiscountMode] = useState('percent');
-  const [discountValue, setDiscountValue] = useState('0');
+  // Available data from Odoo backend
+  const [usersList, setUsersList] = useState([]);
+  const [roomRates, setRoomRates] = useState([]);
+  const [servicesList, setServicesList] = useState([]);
+  const [optionsList, setOptionsList] = useState([]);
+  const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
+  const [isCreatingDemo, setIsCreatingDemo] = useState(false);
 
-  // Service fields
-  const [serviceInfo, setServiceInfo] = useState({});
-  const [travellersText, setTravellersText] = useState('مسافر مثال 1 | DEMO-001');
+  // Hotel specific fields
+  const [hotelRateId, setHotelRateId] = useState('');
+  const [checkin, setCheckin] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [checkout, setCheckout] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 4);
+    return d.toISOString().slice(0, 10);
+  });
 
+  // Services / Packages / Cars / Tours / Transfers
+  const [serviceId, setServiceId] = useState('');
+  const [serviceOptionId, setServiceOptionId] = useState('');
+  const [departureAt, setDepartureAt] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 2);
+    d.setHours(9, 0, 0, 0);
+    return d.toISOString().slice(0, 16);
+  });
+  const [returnAt, setReturnAt] = useState('');
+
+  // Common counters
+  const [quantity, setQuantity] = useState(1);
+  const [adults, setAdults] = useState(2);
+  const [children, setChildren] = useState(0);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Eligible providers
-  const eligibleProviders = useMemo(() => {
-    return providers.filter(p =>
-      p.status === 'published' &&
-      p.operatingEnabled !== false &&
-      (p.serviceType === service || (service === 'tour' && p.serviceType === 'transfer'))
-    );
-  }, [providers, service]);
+  // Fetch live catalog items and users when modal opens
+  useEffect(() => {
+    if (!isModalOpen) return;
+    let cancelled = false;
 
-  // When customer is selected, prefill name and phone
-  const handleCustomerSelect = id => {
-    setCustomerId(id);
-    const found = customers.find(c => c.id === id);
-    if (found) {
-      setCustomer(found.name);
-      setPhone(found.phone || '07XX XXX XX99');
-    }
-  };
+    async function loadBackendData() {
+      setIsLoadingCatalog(true);
+      try {
+        const [usersRes, ratesRes, servicesRes, optionsRes] = await Promise.allSettled([
+          catalogAdminApi.getUsers(),
+          catalogAdminApi.getRoomRates(),
+          catalogAdminApi.getServices(),
+          catalogAdminApi.getServiceOptions(),
+        ]);
 
-  // Live pricing preview calculation
-  const preview = useMemo(() => {
-    try {
-      if (!fx) return null;
-      const numCost = usdToIqd(Number(cost) || 0, fx.rate);
-      if (pricingMode === 'rules') {
-        const usableRules = pricingStorage.getCalculationRules();
-        const r = E.calculate(usableRules, {
-          cost: numCost,
-          currency,
-          service,
-          providerId,
-          date,
-          routeFrom: serviceInfo.origin,
-          routeTo: serviceInfo.destination,
-          carrier: serviceInfo.carrier,
-          cabin: serviceInfo.cabin
-        }, providers);
-        return {
-          cost: numCost,
-          markupAmount: r.markupAmount,
-          original: r.originalPrice,
-          discountAmount: r.discountAmount,
-          final: r.finalPrice,
-          margin: r.finalPrice - numCost,
-          ruleLabel: [r.markupRule?.name || 'دون زيادة', r.discountRule?.name || 'دون خصم'].join(' / ')
-        };
-      } else {
-        const snap = M.snapshot({
-          cost: numCost,
-          markupMode,
-          markupValue: Number(markupValue) || 0,
-          discountMode,
-          discountValue: Number(discountValue) || 0
-        }, currency);
-        return snap;
+        if (!cancelled) {
+          if (usersRes.status === 'fulfilled' && Array.isArray(usersRes.value?.items)) {
+            setUsersList(usersRes.value.items);
+          }
+          if (ratesRes.status === 'fulfilled' && Array.isArray(ratesRes.value?.items)) {
+            setRoomRates(ratesRes.value.items);
+            if (ratesRes.value.items.length > 0 && !hotelRateId) {
+              setHotelRateId(String(ratesRes.value.items[0].id));
+            }
+          }
+          if (servicesRes.status === 'fulfilled' && Array.isArray(servicesRes.value?.items)) {
+            setServicesList(servicesRes.value.items);
+          }
+          if (optionsRes.status === 'fulfilled' && Array.isArray(optionsRes.value?.items)) {
+            setOptionsList(optionsRes.value.items);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load backend options:', err);
+      } finally {
+        if (!cancelled) setIsLoadingCatalog(false);
       }
-    } catch {
-      return null;
     }
-  }, [cost, fx, currency, service, providerId, date, serviceInfo, pricingMode, markupMode, markupValue, discountMode, discountValue, providers]);
 
-  const handleSubmit = e => {
-    e.preventDefault();
-    setErrorMsg('');
-    try {
-      if (!fx) throw new Error('يجب أن يسجّل مدير النظام سعر صرف الدولار لليوم قبل إنشاء حجز جديد.');
-      const usd = Number(cost);
-      if (!Number.isFinite(usd) || usd <= 0) {
-        throw new Error('أدخل صافي المورّد بالدولار أكبر من صفر.');
-      }
-      if (!preview) throw new Error('راجع قيم التسعير.');
-      const numCost = preview.cost;
-      if (!customer.trim()) throw new Error('اكتب اسم العميل التجريبي.');
-      if (!route.trim()) throw new Error('اكتب المسار أو الوجهة.');
-      if (!detail.trim()) throw new Error('اكتب تفاصيل الطلب.');
-      if (!providerId) throw new Error('اختر مزوّد الخدمة.');
+    loadBackendData();
+    return () => { cancelled = true; };
+  }, [isModalOpen]);
 
-      const travellers = travellersText.split(/\r?\n/).map(v => v.trim()).filter(Boolean).map(v => {
-        const [name, passport = ''] = v.split('|');
-        return { name: name.trim(), passport: passport.trim() };
-      });
-
-      let snapshotData;
-      if (pricingMode === 'rules') {
-        snapshotData = {
-          cost: preview.cost,
-          markupMode: 'fixed',
-          markupValue: preview.markupAmount,
-          discountMode: 'fixed',
-          discountValue: preview.discountAmount,
-          basis: 'rules-snapshot',
-          ruleLabel: preview.ruleLabel
-        };
-      } else {
-        snapshotData = {
-          cost: numCost,
-          markupMode,
-          markupValue: Number(markupValue),
-          discountMode,
-          discountValue: Number(discountValue),
-          basis: 'manual'
-        };
-      }
-
-      const newBooking = operationsStorage.createBooking({
-        service,
-        source,
-        customerId,
-        customer,
-        phone,
-        date,
-        currency,
-        route,
-        detail,
-        providerId,
-        serviceInfo,
-        travellers,
-        ...snapshotData,
-        supplierNetUsd: usd
-      });
-
-      toast(`تم إنشاء الطلب ${newBooking.id} بنجاح.`);
-      (onSuccess || onCreated)?.(newBooking);
-      onClose();
-    } catch (err) {
-      setErrorMsg(err.message);
+  // Update selected serviceId when serviceType changes
+  useEffect(() => {
+    const matching = servicesList.filter(s => s.service_type === serviceType);
+    if (matching.length > 0) {
+      setServiceId(String(matching[0].id));
+    } else {
+      setServiceId('');
     }
-  };
+  }, [serviceType, servicesList]);
 
   if (!isModalOpen) return null;
+
+  // Quick helper to seed a demo hotel and room rate in Odoo
+  const handleCreateDemoHotel = async () => {
+    setIsCreatingDemo(true);
+    setErrorMsg('');
+    try {
+      const hotel = await catalogAdminApi.createHotel({
+        name: 'فندق قصر يار التجريبي',
+        city: 'بغداد',
+        country: 'العراق',
+        stars: 5,
+      });
+
+      const rate = await catalogAdminApi.createRoomRate({
+        room_id: hotel.id,
+        name: 'غرفة ديلوكس مزدوجة مع إفطار',
+        meal_plan: 'BB',
+        price_usd: 120,
+        supplier_cost_usd: 80,
+      });
+
+      toast(`تم إنشاء فندق وسعر غرفة جديد على السيرفر برقم #${rate.id}`);
+      setRoomRates(prev => [rate, ...prev]);
+      setHotelRateId(String(rate.id));
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'فشل إنشاء فندق تجريبي على السيرفر.');
+    } finally {
+      setIsCreatingDemo(false);
+    }
+  };
+
+  // Quick helper to seed a demo service in Odoo
+  const handleCreateDemoService = async () => {
+    setIsCreatingDemo(true);
+    setErrorMsg('');
+    try {
+      const serviceNames = {
+        package: 'باقة اكتشاف العراق وسامراء 4 أيام',
+        tour: 'جولة سياحية تاريخية في بغداد',
+        transfer: 'استقبال وتوديع مطار بغداد الدولي',
+        car: 'تأجير سيارة دفع رباعي مع سائق',
+      };
+      const name = serviceNames[serviceType] || 'خدمة سياحية تجريبية';
+
+      const newService = await catalogAdminApi.createService({
+        name,
+        service_type: serviceType,
+        city: 'بغداد',
+        price_usd: 150,
+        supplier_cost_usd: 100,
+      });
+
+      toast(`تم إنشاء ${name} على السيرفر برقم #${newService.id}`);
+      setServicesList(prev => [newService, ...prev]);
+      setServiceId(String(newService.id));
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'فشل إنشاء خدمة تجريبية على السيرفر.');
+    } finally {
+      setIsCreatingDemo(false);
+    }
+  };
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    setErrorMsg('');
+    setIsSubmitting(true);
+
+    try {
+      const payload = {
+        service_type: serviceType,
+        quantity: Math.max(1, Number(quantity) || 1),
+        adults: Math.max(1, Number(adults) || 1),
+        children: Math.max(0, Number(children) || 0),
+      };
+
+      if (customerId && customerId.trim()) {
+        const parsedCust = parseInt(customerId.trim(), 10);
+        if (!isNaN(parsedCust) && parsedCust > 0) {
+          payload.customer_id = parsedCust;
+        }
+      }
+
+      if (serviceType === 'hotel') {
+        if (!hotelRateId) throw new Error('يرجى اختيار سعر الغرفة.');
+        if (!checkin || !checkout) throw new Error('يرجى تحديد تاريخ الوصول والمغادرة.');
+        if (checkin >= checkout) throw new Error('تاريخ المغادرة يجب أن يكون بعد تاريخ الوصول.');
+        
+        payload.hotel_rate_id = parseInt(hotelRateId, 10);
+        payload.checkin = checkin;
+        payload.checkout = checkout;
+      } else {
+        if (!serviceId) throw new Error('يرجى اختيار الخدمة المطلوبة.');
+        if (!departureAt) throw new Error('يرجى تحديد موعد الانطلاق.');
+
+        payload.service_id = parseInt(serviceId, 10);
+        payload.departure_at = departureAt;
+        if (serviceOptionId && serviceOptionId.trim()) {
+          payload.service_option_id = parseInt(serviceOptionId, 10);
+        }
+        if (returnAt && returnAt.trim()) {
+          payload.return_at = returnAt;
+        }
+      }
+
+      // Execute live creation via API 039
+      const createdRecord = await bookingsApi.createBooking(payload);
+
+      toast(`تم إنشاء الحجز على السيرفر بنجاح برقم ${createdRecord.reference || createdRecord.id}.`);
+      window.dispatchEvent(new CustomEvent('yar:bookings-updated'));
+      (onSuccess || onCreated)?.(createdRecord);
+      onClose();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'حدث خطأ أثناء إرسال الحجز إلى الخادم.';
+      setErrorMsg(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const matchingServices = servicesList.filter(s => s.service_type === serviceType);
+  const matchingOptions = optionsList.filter(o => String(o.service_id) === String(serviceId));
+
+  const serviceTypeLabels = {
+    package: 'باقة سفر متكاملة',
+    tour: 'جولة سياحية',
+    transfer: 'نقل واستقبال',
+    car: 'تأجير سيارة',
+    hotel: 'حجز فندقي',
+  };
 
   return (
     <Drawer
       open={isModalOpen}
       onClose={onClose}
-      eyebrow="حجز جديد · إدخال يدوي"
-      title="إدخال طلب جديد"
+      eyebrow="حجز جديد"
+      title="إدخال حجز جديد"
     >
-      <div className="ops-create-modal">
-        <p className="ops-note" style={{ marginBottom: 16 }}>
-          طلب وبيانات اتصال تجريبية فقط. لا تُفتح محادثة واتساب ولا يُرسل طلب خارجي. لقطة السعر تثبت عند الحفظ ولا تتغير مع القواعد لاحقًا.
+      <div className="ops-create-modal" style={{ padding: '4px 0' }}>
+        <p className="ops-note" style={{ marginBottom: 16, fontSize: 13, lineHeight: 1.6, color: 'var(--muted)' }}>
+          يتم تسجيل الحجز مباشرة في قاعدة البيانات، وتُحسب الأسعار وسعر صرف العملات والخصومات آلياً.
         </p>
 
         {errorMsg && (
-          <div className="ops-form-error wide" role="alert" style={{ marginBottom: 16 }}>
-            {errorMsg}
+          <div className="ops-form-error wide" role="alert" style={{ marginBottom: 16, padding: '10px 14px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--c-ef4444)', borderRadius: 8, color: 'var(--c-ef4444)', fontSize: 13 }}>
+            <strong>خطأ: </strong> {errorMsg}
           </div>
         )}
 
         <form className="ops-form-grid" onSubmit={handleSubmit}>
-        <label className="ops-field">
-          <span>الخدمة</span>
-          <select value={service} onChange={e => { setService(e.target.value); setProviderId(''); }}>
-            {Object.entries(M.services).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
-            ))}
-          </select>
-        </label>
+          {/* Service Type */}
+          <label className="ops-field wide">
+            <span>نوع الخدمة *</span>
+            <select
+              value={serviceType}
+              onChange={e => setServiceType(e.target.value)}
+              style={{ fontWeight: 600 }}
+            >
+              <option value="package">باقة سفر متكاملة</option>
+              <option value="hotel">حجز فندقي</option>
+              <option value="tour">جولة سياحية</option>
+              <option value="transfer">نقل واستقبال</option>
+              <option value="car">تأجير سيارة</option>
+            </select>
+          </label>
 
-        <label className="ops-field">
-          <span>مصدر الطلب</span>
-          <select value={source} onChange={e => setSource(e.target.value)}>
-            <option value="whatsapp">واتساب</option>
-            <option value="app">تطبيق YAR</option>
-            <option value="office">المكتب</option>
-          </select>
-        </label>
+          {/* Customer Dropdown */}
+          <label className="ops-field wide">
+            <span>حساب العميل (اختياري)</span>
+            <select
+              value={customerId}
+              onChange={e => setCustomerId(e.target.value)}
+            >
+              <option value="">حجز مباشر باسم الإدارة (افتراضي)</option>
+              {usersList.map(u => {
+                const roleLabel = u.role === 'admin' ? 'مدير' : u.role === 'employee' ? 'موظف' : 'عميل';
+                return (
+                  <option key={u.id} value={u.id}>
+                    {u.name} {u.phone ? `(${u.phone})` : ''} · {roleLabel}
+                  </option>
+                );
+              })}
+            </select>
+            <small style={{ color: 'var(--muted)', fontSize: 11, marginTop: 4 }}>
+              يمكنك اختيار حساب عميل مسجل، أو تركه باسم الإدارة.
+            </small>
+          </label>
 
-        <label className="ops-field wide">
-          <span>ربط بحساب تجريبي موجود (اختياري)</span>
-          <select value={customerId} onChange={e => handleCustomerSelect(e.target.value)}>
-            <option value="">عميل مثال جديد</option>
-            {customers.map(c => (
-              <option key={c.id} value={c.id}>{c.name} ({c.city})</option>
-            ))}
-          </select>
-        </label>
+          {/* Hotel Specific Fields */}
+          {serviceType === 'hotel' ? (
+            <>
+              <div className="ops-field wide" style={{ marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontWeight: 600 }}>سعر الغرفة *</span>
+                  {roomRates.length === 0 && (
+                    <button
+                      type="button"
+                      className="button secondary"
+                      onClick={handleCreateDemoHotel}
+                      disabled={isCreatingDemo}
+                      style={{ padding: '4px 8px', fontSize: 11 }}
+                    >
+                      {isCreatingDemo ? 'جاري الإضافة...' : '+ إضافة فندق تجريبي'}
+                    </button>
+                  )}
+                </div>
 
-        <label className="ops-field wide">
-          <span>اسم العميل التجريبي</span>
-          <input
-            type="text"
-            maxLength={100}
-            value={customer}
-            onChange={e => setCustomer(e.target.value)}
-            placeholder="اسم العميل"
-            required
-          />
-        </label>
-
-        <label className="ops-field wide">
-          <span>هاتف مقنّع · مثال 07XX XXX XX99</span>
-          <input
-            type="text"
-            value={phone}
-            onChange={e => setPhone(e.target.value)}
-            required
-          />
-        </label>
-
-        <label className="ops-field">
-          <span>تاريخ الطلب</span>
-          <input
-            type="date"
-            value={date}
-            onChange={e => setDate(e.target.value)}
-            required
-          />
-        </label>
-
-        <div className="ops-field">
-          <span>عملة العميل</span>
-          <div className="fx-line"><strong>دينار عراقي · IQD</strong><small>صافي المورّد بالدولار</small></div>
-        </div>
-
-        <label className="ops-field wide">
-          <span>المسار / المدينة</span>
-          <input
-            type="text"
-            value={route}
-            onChange={e => setRoute(e.target.value)}
-            placeholder="مثال: بغداد ← مشهد أو فندق حدائق الغيم"
-            required
-          />
-        </label>
-
-        <label className="ops-field wide">
-          <span>تفاصيل الطلب</span>
-          <textarea
-            rows="2"
-            value={detail}
-            onChange={e => setDetail(e.target.value)}
-            placeholder="وصف تفصيلي للخدمة المطلوبة"
-            required
-          />
-        </label>
-
-        <label className="ops-field wide">
-          <span>مزوّد الخدمة</span>
-          <select value={providerId} onChange={e => setProviderId(e.target.value)} required>
-            <option value="">اختر المزوّد</option>
-            {eligibleProviders.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        </label>
-
-        {/* Pricing Mode Section */}
-        <div className="wide" style={{ border: '1px solid var(--border)', padding: 14, borderRadius: 8, background: 'var(--c-fafbf7)', margin: '8px 0' }}>
-          <strong style={{ display: 'block', fontSize: 13, marginBottom: 10, color: 'var(--ink)' }}>
-            إعداد التسعير
-          </strong>
-          {fx ? (
-            <div className="fx-line" style={{ marginBottom: 12 }}>
-              <span>سعر التحويل المعتمد اليوم</span>
-              <strong><bdi dir="ltr">1 $ = {fx.rate.toLocaleString('en-US')} د.ع</bdi></strong>
-            </div>
-          ) : <FxRateBanner />}
-          <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
-              <input
-                type="radio"
-                name="pricingMode"
-                value="manual"
-                checked={pricingMode === 'manual'}
-                onChange={() => setPricingMode('manual')}
-              />
-              <span>تسعير يدوي مخصص</span>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
-              <input
-                type="radio"
-                name="pricingMode"
-                value="rules"
-                checked={pricingMode === 'rules'}
-                onChange={() => setPricingMode('rules')}
-              />
-              <span>تطبيق قواعد التسعير الحالية</span>
-            </label>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <label className="ops-field">
-              <span>صافي المورّد (USD)</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                dir="ltr"
-                value={cost}
-                onChange={e => setCost(e.target.value)}
-                required
-              />
-            </label>
-
-            {pricingMode === 'manual' && (
-              <>
-                <label className="ops-field">
-                  <span>نوع الزيادة (Markup)</span>
-                  <select value={markupMode} onChange={e => setMarkupMode(e.target.value)}>
-                    <option value="percent">نسبة مئوية (%)</option>
-                    <option value="fixed">مبلغ ثابت ({currency})</option>
+                {roomRates.length > 0 ? (
+                  <select
+                    value={hotelRateId}
+                    onChange={e => setHotelRateId(e.target.value)}
+                    required
+                  >
+                    <option value="">-- اختر الغرفة من القائمة --</option>
+                    {roomRates.map(r => (
+                      <option key={r.id} value={r.id}>
+                        {r.name || 'غرفة فندقية'} {r.price_usd ? `(${r.price_usd} دولار)` : ''}
+                      </option>
+                    ))}
                   </select>
-                </label>
-                <label className="ops-field">
-                  <span>قيمة الزيادة</span>
+                ) : (
+                  <div>
+                    <input
+                      type="number"
+                      min="1"
+                      value={hotelRateId}
+                      onChange={e => setHotelRateId(e.target.value)}
+                      placeholder="أدخل معرّف سعر الغرفة أو اضغط الزر للإضافة"
+                      required
+                    />
+                    <small style={{ color: 'var(--c-ef4444)', fontSize: 11, marginTop: 4, display: 'block' }}>
+                      لا توجد غرف مسجلة حالياً. اضغط على الزر أعلاه لإضافة غرفة تجريبية بنقرة واحدة.
+                    </small>
+                  </div>
+                )}
+              </div>
+
+              <label className="ops-field">
+                <span>تاريخ الوصول *</span>
+                <input
+                  type="date"
+                  value={checkin}
+                  onChange={e => setCheckin(e.target.value)}
+                  required
+                />
+              </label>
+
+              <label className="ops-field">
+                <span>تاريخ المغادرة *</span>
+                <input
+                  type="date"
+                  value={checkout}
+                  onChange={e => setCheckout(e.target.value)}
+                  required
+                />
+              </label>
+            </>
+          ) : (
+            /* Service / Package / Tour / Transfer / Car Fields */
+            <>
+              <div className="ops-field wide" style={{ marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontWeight: 600 }}>الخدمة المطلوبة *</span>
+                  {matchingServices.length === 0 && (
+                    <button
+                      type="button"
+                      className="button secondary"
+                      onClick={handleCreateDemoService}
+                      disabled={isCreatingDemo}
+                      style={{ padding: '4px 8px', fontSize: 11 }}
+                    >
+                      {isCreatingDemo ? 'جاري الإضافة...' : `+ إضافة ${serviceTypeLabels[serviceType]} تجريبية`}
+                    </button>
+                  )}
+                </div>
+
+                {matchingServices.length > 0 ? (
+                  <select
+                    value={serviceId}
+                    onChange={e => setServiceId(e.target.value)}
+                    required
+                  >
+                    <option value="">-- اختر الخدمة من القائمة --</option>
+                    {matchingServices.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} {s.city ? `· ${s.city}` : ''} {s.price_usd ? `(${s.price_usd} دولار)` : ''}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div>
+                    <input
+                      type="number"
+                      min="1"
+                      value={serviceId}
+                      onChange={e => setServiceId(e.target.value)}
+                      placeholder="أدخل معرّف الخدمة أو اضغط الزر للإضافة"
+                      required
+                    />
+                    <small style={{ color: 'var(--c-ef4444)', fontSize: 11, marginTop: 4, display: 'block' }}>
+                      لا توجد خدمات من نوع «{serviceTypeLabels[serviceType]}» مسجلة حالياً. اضغط الزر أعلاه لإضافتها فوراً.
+                    </small>
+                  </div>
+                )}
+              </div>
+
+              {/* Service Option Dropdown */}
+              <label className="ops-field wide">
+                <span>الخيارات الإضافية (اختياري)</span>
+                {matchingOptions.length > 0 ? (
+                  <select
+                    value={serviceOptionId}
+                    onChange={e => setServiceOptionId(e.target.value)}
+                  >
+                    <option value="">بدون خيارات إضافية (افتراضي)</option>
+                    {matchingOptions.map(o => (
+                      <option key={o.id} value={o.id}>
+                        {o.name} {o.price_usd ? `(+${o.price_usd} دولار)` : ''}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
                   <input
                     type="number"
-                    step="any"
-                    value={markupValue}
-                    onChange={e => setMarkupValue(e.target.value)}
+                    min="1"
+                    value={serviceOptionId}
+                    onChange={e => setServiceOptionId(e.target.value)}
+                    placeholder="اختياري: أدخل رقم الخيار أو اتركه فارغاً"
                   />
-                </label>
+                )}
+              </label>
 
-                <label className="ops-field">
-                  <span>نوع الخصم (Discount)</span>
-                  <select value={discountMode} onChange={e => setDiscountMode(e.target.value)}>
-                    <option value="percent">نسبة مئوية (%)</option>
-                    <option value="fixed">مبلغ ثابت ({currency})</option>
-                  </select>
-                </label>
-                <label className="ops-field">
-                  <span>قيمة الخصم</span>
-                  <input
-                    type="number"
-                    step="any"
-                    value={discountValue}
-                    onChange={e => setDiscountValue(e.target.value)}
-                  />
-                </label>
-              </>
-            )}
-          </div>
+              <label className="ops-field">
+                <span>موعد الانطلاق *</span>
+                <input
+                  type="datetime-local"
+                  value={departureAt}
+                  onChange={e => setDepartureAt(e.target.value)}
+                  required
+                />
+              </label>
 
-          {preview && (
-            <div className="ops-money-lines" style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--c-e7ede2)' }}>
-              <div>
-                <span>صافي المورّد</span>
-                <strong><bdi>{(Number(cost) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</bdi></strong>
-              </div>
-              <div>
-                <span>التكلفة بالدينار (حسب سعر اليوم)</span>
-                <strong>{preview.cost.toLocaleString('en-US')} {currency}</strong>
-              </div>
-              <div>
-                <span>السعر الأصلي</span>
-                <strong>{preview.original.toLocaleString('en-US')} {currency}</strong>
-              </div>
-              <div>
-                <span>الخصم</span>
-                <strong>{preview.discountAmount.toLocaleString('en-US')} {currency}</strong>
-              </div>
-              <div>
-                <span>السعر النهائي للبيع</span>
-                <strong style={{ color: 'var(--c-2d5327)' }}>{preview.final.toLocaleString('en-US')} {currency}</strong>
-              </div>
-              <div>
-                <span>الهامش النظري</span>
-                <strong style={{ color: preview.margin >= 0 ? 'var(--c-32602b)' : 'var(--c-8d473f)' }}>
-                  {preview.margin.toLocaleString('en-US')} {currency}
-                </strong>
-              </div>
-            </div>
+              <label className="ops-field">
+                <span>موعد العودة (اختياري)</span>
+                <input
+                  type="datetime-local"
+                  value={returnAt}
+                  onChange={e => setReturnAt(e.target.value)}
+                />
+              </label>
+            </>
           )}
-        </div>
 
-        {service === 'hotel' && <HotelOfferPicker onApply={({ snapshot, quote, plan, hotel, room, request, supplierCost }) => {
-          if (!fx) { toast('يجب أن يسجّل مدير النظام سعر صرف الدولار لليوم قبل إنشاء حجز جديد.'); return; }
-          const planCurrency = plan.currency || 'IQD';
-          // Customer total in IQD; supplier net in USD (offer snapshot keeps the plan's own currency).
-          const total = planCurrency === 'USD' ? usdToIqd(quote.total, fx.rate) : quote.total;
-          const netUsd = supplierCost != null && supplierCost > 0 ? (planCurrency === 'USD' ? supplierCost : iqdToUsd(supplierCost, fx.rate)) : null;
-          setRoute(`${hotel.city} · ${hotel.name}`);
-          setDetail(`${request.rooms} × ${room.name} · ${plan.mealPlan} · ${quote.nights} ليالٍ`);
-          setServiceInfo(prev => ({ ...prev, hotelName: hotel.name, checkIn: request.checkIn, checkOut: request.checkOut, rooms: `${request.rooms} × ${room.name} · ${request.adults} بالغين${request.children ? ` + ${request.children} أطفال` : ''} · ${plan.mealPlan}`, hotelOffer: snapshot }));
-          if (netUsd != null && total >= usdToIqd(netUsd, fx.rate)) {
-            setPricingMode('manual'); setCost(String(netUsd)); setMarkupMode('fixed'); setMarkupValue(String(total - usdToIqd(netUsd, fx.rate))); setDiscountMode('fixed'); setDiscountValue('0');
-            toast('تم تطبيق العرض: تكلفة المورد وسعر البيع من خطة السعر.');
-          } else {
-            // No supplier cost in the rate plan: keep the selling total and ask staff to split cost/markup.
-            const usdGuess = iqdToUsd(total, fx.rate);
-            setPricingMode('manual'); setCost(String(usdGuess)); setMarkupMode('fixed'); setMarkupValue(String(Math.max(0, total - usdToIqd(usdGuess, fx.rate)))); setDiscountMode('fixed'); setDiscountValue('0');
-            toast('تم تطبيق سعر العرض. تكلفة المورد غير محددة في خطة السعر؛ عدّل التكلفة والزيادة قبل الحفظ.');
-          }
-        }} />}
-
-        {/* Dynamic schema fields */}
-        {Object.entries(serviceSchemas[service] || {}).map(([key, label]) => (
-          <label className="ops-field" key={key}>
-            <span>{label}</span>
+          {/* Counts */}
+          <label className="ops-field">
+            <span>{serviceType === 'hotel' ? 'عدد الغرف' : 'الكمية'} *</span>
             <input
-              type={/Date$|checkIn|checkOut/.test(key) ? 'date' : 'text'}
-              value={serviceInfo[key] || ''}
-              onChange={e => setServiceInfo({ ...serviceInfo, [key]: e.target.value })}
+              type="number"
+              min="1"
+              max="20"
+              value={quantity}
+              onChange={e => setQuantity(Number(e.target.value))}
+              required
             />
           </label>
-        ))}
 
-        <label className="ops-field wide">
-          <span>المسافرون (اسم | جواز تجريبي في كل سطر)</span>
-          <textarea
-            rows="3"
-            value={travellersText}
-            onChange={e => setTravellersText(e.target.value)}
-          />
-        </label>
+          <label className="ops-field">
+            <span>عدد البالغين *</span>
+            <input
+              type="number"
+              min="1"
+              max="50"
+              value={adults}
+              onChange={e => setAdults(Number(e.target.value))}
+              required
+            />
+          </label>
 
-        <button type="submit" className="button primary wide" style={{ marginTop: 10 }} disabled={!fx}>
-          حفظ الطلب والتسعير المحلي
-        </button>
-      </form>
-    </div>
-  </Drawer>
+          <label className="ops-field wide">
+            <span>عدد الأطفال</span>
+            <input
+              type="number"
+              min="0"
+              max="20"
+              value={children}
+              onChange={e => setChildren(Number(e.target.value))}
+            />
+          </label>
+
+          {/* Submit Buttons */}
+          <div className="ops-form-actions wide" style={{ marginTop: 20, display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              className="button secondary"
+              onClick={onClose}
+              disabled={isSubmitting}
+            >
+              إلغاء
+            </button>
+            <button
+              type="submit"
+              className="button primary"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'جاري الحفظ...' : 'تأكيد وحفظ الحجز'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </Drawer>
   );
 }
 
 export default CreateBookingModal;
-

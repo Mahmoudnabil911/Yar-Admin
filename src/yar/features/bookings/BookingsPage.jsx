@@ -1,10 +1,12 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Icon } from '../../components/ui/Icon';
 import { operationsStorage } from '../../services/storage/operationsStorage';
 import { catalogStorage } from '../../services/storage/catalogStorage';
 import { staffStorage } from '../../services/storage/staffStorage';
 import { operationsModel as M } from '../../services/models';
 import { useToast } from '../../components/ui/Toast';
+import { bookingsApi } from '../../services/api/bookingsApi';
+import { getAccessToken } from '../../services/api/authApi';
 
 export function BookingsPage({
   onOpenBooking,
@@ -18,7 +20,7 @@ export function BookingsPage({
   const handleCreate = onOpenCreate || onCreateBooking;
   const effectiveSearchQuery = searchQuery || externalQuery || '';
 
-  const [bookings, setBookings] = useState(() => operationsStorage.getBookings());
+  const [backendItems, setBackendItems] = useState(null);
   const [providers, setProviders] = useState(() => catalogStorage.getRecords('providers'));
   const [staffList, setStaffList] = useState(() => staffStorage.getStaff());
 
@@ -36,17 +38,59 @@ export function BookingsPage({
 
   const [page, setPage] = useState(1);
   const pageSize = 10;
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const loadBackendBookings = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      const res = await bookingsApi.listBookings({ limit: 100 });
+      if (res && Array.isArray(res.items)) {
+        const mapped = res.items.map(bookingsApi.mapRecordToRow);
+        setBackendItems(mapped);
+      } else {
+        setBackendItems([]);
+      }
+    } catch (err) {
+      console.warn('Backend bookings fetch:', err);
+      if (!getAccessToken()) {
+        setBackendItems(operationsStorage.getBookings());
+      } else {
+        setBackendItems([]);
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  }, []);
+
+  const handleSync = async () => {
+    try {
+      await loadBackendBookings();
+      toast('تمت مزامنة الحجوزات مع الخادم.');
+    } catch {
+      toast('تعذرت المزامنة مع الخادم.');
+    }
+  };
 
   useEffect(() => {
-    const unsubOps = operationsStorage.subscribe(() => setBookings(operationsStorage.getBookings()));
+    loadBackendBookings();
+
+    const handleUpdate = () => loadBackendBookings();
+    window.addEventListener('yar:bookings-updated', handleUpdate);
+
     const unsubCat = catalogStorage.subscribe(() => setProviders(catalogStorage.getRecords('providers')));
     const unsubStaff = staffStorage.subscribe(() => setStaffList(staffStorage.getStaff()));
     return () => {
-      unsubOps();
+      window.removeEventListener('yar:bookings-updated', handleUpdate);
       unsubCat();
       unsubStaff();
     };
-  }, []);
+  }, [loadBackendBookings]);
+
+  const activeBookings = useMemo(() => {
+    if (backendItems !== null) return backendItems;
+    if (getAccessToken()) return [];
+    return operationsStorage.getBookings();
+  }, [backendItems]);
 
   const numFormat = useMemo(() => new Intl.NumberFormat('en-US'), []);
   const num = val => numFormat.format(Number(val) || 0);
@@ -54,14 +98,14 @@ export function BookingsPage({
   // Filtered rows
   const filteredRows = useMemo(() => {
     try {
-      return operationsStorage.filter({
+      return M.filter(activeBookings, {
         ...filters,
         query: effectiveSearchQuery
       });
     } catch {
       return [];
     }
-  }, [filters, effectiveSearchQuery, bookings]);
+  }, [filters, effectiveSearchQuery, activeBookings]);
 
   // Stat calculations
   const stats = useMemo(() => {
@@ -195,6 +239,16 @@ export function BookingsPage({
             />
           </label>
           <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className="quiet-button"
+              onClick={handleSync}
+              disabled={isSyncing}
+              title="مزامنة مع خادم Odoo"
+            >
+              <i data-icon="refresh"><Icon name="refresh" /></i>
+              {isSyncing ? 'جاري المزامنة...' : 'تحديث'}
+            </button>
             <button
               type="button"
               className="quiet-button"
@@ -403,15 +457,31 @@ export function BookingsPage({
           ) : (
             <div className="empty-state" style={{ padding: '40px 20px', textAlign: 'center' }}>
               <i data-icon="search"><Icon name="search" /></i>
-              <strong>لا توجد طلبات مطابقة</strong>
-              <p>جرّب تغيير المرشحات أو مسح البحث.</p>
-              <button
-                type="button"
-                className="button secondary"
-                onClick={handleResetFilters}
-              >
-                مسح التصفية
-              </button>
+              <strong>{activeBookings.length === 0 ? 'لا توجد حجوزات مسجلة على الخادم بعد' : 'لا توجد طلبات مطابقة'}</strong>
+              <p>
+                {activeBookings.length === 0
+                  ? 'قاعدة بيانات السيرفر الحالية لا تحتوي على حجوزات. يمكنك إنشاء حجز حقيقي الآن بالضغط على زر «إدخال طلب يدوي».'
+                  : 'جرّب تغيير المرشحات أو مسح البحث.'}
+              </p>
+              {activeBookings.length === 0 ? (
+                <button
+                  type="button"
+                  className="button primary"
+                  onClick={handleCreate}
+                  style={{ marginTop: 12 }}
+                >
+                  <i data-icon="plus"><Icon name="plus" /></i>
+                  إدخال طلب يدوي
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={handleResetFilters}
+                >
+                  مسح التصفية
+                </button>
+              )}
             </div>
           )}
         </div>
