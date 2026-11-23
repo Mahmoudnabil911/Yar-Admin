@@ -6,3 +6,4 @@
 @media(max-width:370px){.aud-tabs button{font-size:12px;padding-inline-start:4px;padding-inline-end:4px;gap:4px}.aud-tabs button i svg{width:14px;height:14px}}
 
 .aud-tabs{overflow-x:auto;overflow-y:hidden;overscroll-behavior-inline:contain}.aud-tabs button{flex-shrink:0}@media(max-width:760px){.aud-tabs{justify-content:flex-start}}
+.aud-api-report-metrics{grid-template-columns:repeat(2,minmax(0,1fr));max-width:640px;margin-inline-start:auto}.aud-api-report-grid{grid-template-columns:minmax(0,1fr);gap:14px}.aud-api-report-grid>.panel{width:100%;min-width:0}.aud-api-report-grid .table-scroll{max-width:100%;overflow-x:auto}.aud-api-report-grid table{min-width:0;white-space:normal}.aud-api-report-grid th,.aud-api-report-grid td{overflow-wrap:anywhere}.aud-api-report-grid>section>h3{padding:17px 20px 12px;color:var(--c-2e4d27);font-size:14px}
