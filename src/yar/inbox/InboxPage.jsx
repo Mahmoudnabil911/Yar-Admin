@@ -54,12 +54,13 @@ export default function InboxPage({ onNavigate, externalQuery = '' }) {
   const unavailable = t('تعذر معالجة الطلب حالياً. يرجى المحاولة مرة أخرى.', 'Unable to process request. Please try again.');
   const text = (r, key) => (lang === 'en' ? (r[key + 'En'] || r[key] || '') : (r[key] || ''));
 
-  async function load() {
+  async function load(isActive = () => true) {
     setLoading(true);
     setError('');
     try {
       assertCan('inquiry.view');
       const res = await inboxApi.getInquiries();
+      if (!isActive()) return;
       const rawItems = res?.items || [];
       const next = rawItems.map((r) => {
         const cName = r.customer_name || r.name || r.customer || (r.id ? `عميل #${r.id}` : 'عميل');
@@ -95,18 +96,24 @@ export default function InboxPage({ onNavigate, externalQuery = '' }) {
         };
       });
 
+      if (!isActive()) return;
       setRows(next);
       setSelected((curr) => (next.some(item => String(item.id) === String(curr)) ? curr : (next[0]?.id || null)));
     } catch (err) {
+      if (!isActive()) return;
       console.error('Failed to load inquiries:', err);
       setError(err?.ar || err?.message || unavailable);
     } finally {
-      setLoading(false);
+      if (isActive()) setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
+    let active = true;
+    load(() => active);
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {

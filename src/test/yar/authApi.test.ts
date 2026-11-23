@@ -244,5 +244,40 @@ describe('YAR Odoo 18 Auth API & Repository Integration', () => {
     expect(json.data.items).toHaveLength(1);
     expect(getStoredTokens()?.access_token).toBe('fresh-new-token');
   });
+
+  it('deduplicates concurrent in-flight GET requests and returns independent cloned responses', async () => {
+    setStoredTokens({
+      access_token: 'test-token',
+      refresh_token: 'test-refresh',
+      expires_in: 900,
+    });
+
+    const mockPayload = { success: true, data: { items: [1, 2, 3] } };
+    const fetchSpy = vi.fn().mockImplementation(async () => {
+      // Simulate small network delay
+      await new Promise(r => setTimeout(r, 20));
+      return new Response(JSON.stringify(mockPayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(fetchSpy);
+
+    // Call fetchWithAuth twice simultaneously for the same URL
+    const [res1, res2] = await Promise.all([
+      fetchWithAuth('https://yar-odoo.samaalrosha.com/api/v1/inbox'),
+      fetchWithAuth('https://yar-odoo.samaalrosha.com/api/v1/inbox'),
+    ]);
+
+    // Network fetch was invoked only once
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    // Both callers can independently consume the body
+    const body1 = await res1.json();
+    const body2 = await res2.json();
+    expect(body1).toEqual(mockPayload);
+    expect(body2).toEqual(mockPayload);
+  });
 });
 

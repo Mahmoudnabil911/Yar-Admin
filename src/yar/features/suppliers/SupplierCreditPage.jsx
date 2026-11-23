@@ -47,22 +47,32 @@ export function SupplierCreditPage({ onNavigate, onOpenBooking, searchQuery = ''
   const [drawerBalance, setDrawerBalance] = useState(0);
 
   // Load suppliers from API 065
-  const loadSuppliers = useCallback(async () => {
+  const loadSuppliers = useCallback(async (isActive = () => true) => {
     setLoading(true);
     setError(null);
     try {
       const res = await suppliersApi.getSuppliers();
-      setLiveSuppliers(res.items || []);
+      if (isActive()) {
+        setLiveSuppliers(res.items || []);
+      }
     } catch (err) {
-      console.error('Failed to load suppliers:', err);
-      setError(err.message || 'تعذر تحميل أرصدة الموردين من الخادم.');
+      if (isActive()) {
+        console.error('Failed to load suppliers:', err);
+        setError(err.message || 'تعذر تحميل أرصدة الموردين من الخادم.');
+      }
     } finally {
-      setLoading(false);
+      if (isActive()) {
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    loadSuppliers();
+    let active = true;
+    loadSuppliers(() => active);
+    return () => {
+      active = false;
+    };
   }, [loadSuppliers]);
 
   // Load drawer ledger from API 066 when drawer opens

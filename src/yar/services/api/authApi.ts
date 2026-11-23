@@ -118,6 +118,7 @@ export function setStoredTokens(tokens: AuthTokens): void {
 }
 
 export function clearStoredTokens(): void {
+  clearInFlightRequests();
   if (typeof window === 'undefined') return;
   cachedMeUser = null;
   lastMeTime = 0;
@@ -201,7 +202,15 @@ function _backoffDelay(attempt: number): number {
  * 3. Enforces an internal 10s timeout per attempt so requests never hang indefinitely in (pending).
  * 4. Intercepts 401 responses, executes single-flight token rotation, and replays once.
  * 5. Retries GET/HEAD requests up to 3× on 502/503/504 (gateway errors), 429, or network drops/timeouts.
+ * 6. Deduplicates concurrent in-flight GET/HEAD requests so parallel component mounts or React StrictMode
+ *    never trigger duplicate HTTP calls in the Network tab.
  */
+const inFlightGets = new Map<string, Promise<Response>>();
+
+export function clearInFlightRequests(): void {
+  inFlightGets.clear();
+}
+
 export async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
   let token = getAccessToken();
   const refreshToken = getRefreshToken();
@@ -240,6 +249,18 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}): Pro
   const canRetry = (method === 'GET' || method === 'HEAD') && !options.body;
   const MAX_ATTEMPTS = canRetry ? 4 : 1; // 1 initial + up to 3 retries for reads
 
+  // In-flight GET request deduplication:
+  // If an identical GET/HEAD request is already in-flight, await the same promise
+  // and return a cloned Response. This completely prevents duplicate requests in the Network tab.
+  const canDedupe = canRetry && !options.signal;
+  const dedupeKey = canDedupe ? `${method}:${url}:${token || ''}` : null;
+
+  if (dedupeKey && inFlightGets.has(dedupeKey)) {
+    const existing = inFlightGets.get(dedupeKey)!;
+    const cachedRes = await existing;
+    return typeof cachedRes.clone === 'function' ? cachedRes.clone() : cachedRes;
+  }
+
   const send = (authToken: string | null) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10000);
@@ -257,300 +278,316 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}): Pro
     }).finally(() => clearTimeout(timer));
   };
 
-  let res: Response;
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    try {
-      res = await send(token);
-    } catch (networkErr) {
-      // Network-level failure, socket drop, or 10s timeout
-      if (!canRetry || attempt >= MAX_ATTEMPTS - 1) throw networkErr;
-      await new Promise(r => setTimeout(r, _backoffDelay(attempt)));
-      continue;
+      const performFetch = async (): Promise<Response> => {
+        let res: Response;
+        for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+          try {
+            res = await send(token);
+          } catch (networkErr) {
+            // Network-level failure, socket drop, or 10s timeout
+            if (!canRetry || attempt >= MAX_ATTEMPTS - 1) throw networkErr;
+            await new Promise(r => setTimeout(r, _backoffDelay(attempt)));
+            continue;
+          }
+
+        // 401 → rotate token once (not counted as a retry attempt)
+        if (res.status === 401 && getRefreshToken()) {
+          try {
+            const refreshed = await requestTokenRefresh();
+            token = refreshed.access_token;
+            res = await send(token);
+          } catch {
+            // Refresh failed; return 401 so caller handles it
+          }
+          break;
+        }
+
+        // Success or non-retryable client errors → return immediately
+        if (res.ok || (res.status >= 400 && res.status < 500 && res.status !== 429)) break;
+
+          // 429 Rate-limited — respect Retry-After header
+          if (res.status === 429 && canRetry && attempt < MAX_ATTEMPTS - 1) {
+            const retryAfterSec = Number(res.headers.get('Retry-After') || 2);
+            await new Promise(r => setTimeout(r, retryAfterSec * 1000));
+            continue;
+          }
+
+          // 502 / 503 / 504 — transient gateway errors, back off and retry
+          if ((res.status === 502 || res.status === 503 || res.status === 504) && canRetry && attempt < MAX_ATTEMPTS - 1) {
+            await new Promise(r => setTimeout(r, _backoffDelay(attempt)));
+            continue;
+          }
+
+          // Any other status or last attempt — break
+          break;
+        }
+
+        return res!;
+      };
+
+      if (dedupeKey) {
+        const fetchPromise = performFetch().finally(() => {
+          // Keep entry in map for a brief micro-window (100ms) to absorb rapid StrictMode remounts, then release
+          setTimeout(() => {
+            inFlightGets.delete(dedupeKey);
+          }, 100);
+        });
+        inFlightGets.set(dedupeKey, fetchPromise);
+        const res = await fetchPromise;
+        return typeof res.clone === 'function' ? res.clone() : res;
+      }
+
+      return performFetch();
     }
 
-    // 401 → rotate token once (not counted as a retry attempt)
-    if (res.status === 401 && getRefreshToken()) {
+    const DEFAULT_BASE_URL = 'https://yar-odoo.samaalrosha.com';
+
+    export function getApiBaseUrl(): string {
+      // In Node/Vitest test environments, relative URLs cause undici fetch errors.
+      if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') {
+        return DEFAULT_BASE_URL;
+      }
+      if (typeof window === 'undefined') {
+        return DEFAULT_BASE_URL;
+      }
+      const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as ImportMeta & { env?: Record<string, string> }).env : undefined;
+      const envVal = metaEnv?.VITE_API_BASE_URL;
+      return envVal !== undefined ? envVal : DEFAULT_BASE_URL;
+    }
+
+    async function handleResponse<T>(res: Response): Promise<T> {
+      let envelope: ApiEnvelope<T>;
       try {
-        const refreshed = await requestTokenRefresh();
-        token = refreshed.access_token;
-        res = await send(token);
+        envelope = await res.json();
       } catch {
-        // Refresh failed; return 401 so caller handles it
-      }
-      break;
-    }
-
-    // Success or non-retryable client errors → return immediately
-    if (res.ok || (res.status >= 400 && res.status < 500 && res.status !== 429)) break;
-
-    // 429 Rate-limited — respect Retry-After header
-    if (res.status === 429 && canRetry && attempt < MAX_ATTEMPTS - 1) {
-      const retryAfterSec = Number(res.headers.get('Retry-After') || 2);
-      await new Promise(r => setTimeout(r, retryAfterSec * 1000));
-      continue;
-    }
-
-    // 502 / 503 / 504 — transient gateway errors, back off and retry
-    if ((res.status === 502 || res.status === 503 || res.status === 504) && canRetry && attempt < MAX_ATTEMPTS - 1) {
-      await new Promise(r => setTimeout(r, _backoffDelay(attempt)));
-      continue;
-    }
-
-    // Any other status or last attempt — break
-    break;
-  }
-
-  return res!;
-}
-
-const DEFAULT_BASE_URL = 'https://yar-odoo.samaalrosha.com';
-
-export function getApiBaseUrl(): string {
-  // In Node/Vitest test environments, relative URLs cause undici fetch errors.
-  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') {
-    return DEFAULT_BASE_URL;
-  }
-  if (typeof window === 'undefined') {
-    return DEFAULT_BASE_URL;
-  }
-  const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as ImportMeta & { env?: Record<string, string> }).env : undefined;
-  const envVal = metaEnv?.VITE_API_BASE_URL;
-  return envVal !== undefined ? envVal : DEFAULT_BASE_URL;
-}
-
-async function handleResponse<T>(res: Response): Promise<T> {
-  let envelope: ApiEnvelope<T>;
-  try {
-    envelope = await res.json();
-  } catch {
-    if (res.status === 502 || res.status === 504) {
-      throw new ApiAuthError(
-        'الخادم غير متاح حالياً أو يواجه ضغطاً، يرجى المحاولة بعد دقيقة.',
-        'Server is temporarily busy or unavailable; please retry in a minute.',
-        'bad_gateway',
-        res.status
-      );
-    }
-    if (res.status === 503) {
-      throw new ApiAuthError(
-        'الخدمة مشغولة حالياً، يرجى الانتظار قليلاً والمحاولة مجدداً.',
-        'Service temporarily busy, please try again in a moment.',
-        'service_unavailable',
-        res.status
-      );
-    }
-    throw new ApiAuthError(
-      'تعذر معالجة استجابة الخادم.',
-      'Server response could not be parsed.',
-      'parse_error',
-      res.status
-    );
-  }
-
-  if (!envelope.success || envelope.error) {
-    const code = envelope.error?.code || `http_${res.status}`;
-    const ar = envelope.message?.ar || 'حدث خطأ أثناء معالجة الطلب.';
-    const en = envelope.message?.en || 'An error occurred during the request.';
-    throw new ApiAuthError(ar, en, code, res.status);
-  }
-
-  return envelope.data as T;
-}
-
-let mePromise: Promise<YarUser> | null = null;
-let cachedMeUser: YarUser | null = null;
-let lastMeTime = 0;
-
-export const authApi = {
-  /**
-   * API 004 | JWT login for admin, employee or customer | تسجيل الدخول وإصدار JWT
-   * POST /api/v1/auth/login
-   */
-  async login(payload: LoginPayload): Promise<AuthTokens> {
-    const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    const tokens = await handleResponse<AuthTokens>(res);
-    setStoredTokens(tokens);
-    return tokens;
-  },
-
-  /**
-   * API 012 | Read authenticated user role | بيانات المستخدم الحالي
-   * GET /api/v1/auth/me
-   */
-  async getMe(overrideToken?: string, force = false): Promise<YarUser> {
-    if (!overrideToken && !force && cachedMeUser && (Date.now() - lastMeTime < 30000)) {
-      return cachedMeUser;
-    }
-
-    if (!overrideToken && mePromise) {
-      return mePromise;
-    }
-
-    const run = async (): Promise<YarUser> => {
-      const baseUrl = getApiBaseUrl();
-      const url = `${baseUrl}/api/v1/auth/me`;
-      let res: Response;
-
-      if (overrideToken) {
-        res = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${overrideToken}`,
-          },
-        });
-      } else {
-        res = await fetchWithAuth(url, {
-          method: 'GET',
-        });
+        if (res.status === 502 || res.status === 504) {
+          throw new ApiAuthError(
+            'الخادم غير متاح حالياً أو يواجه ضغطاً، يرجى المحاولة بعد دقيقة.',
+            'Server is temporarily busy or unavailable; please retry in a minute.',
+            'bad_gateway',
+            res.status
+          );
+        }
+        if (res.status === 503) {
+          throw new ApiAuthError(
+            'الخدمة مشغولة حالياً، يرجى الانتظار قليلاً والمحاولة مجدداً.',
+            'Service temporarily busy, please try again in a moment.',
+            'service_unavailable',
+            res.status
+          );
+        }
+        throw new ApiAuthError(
+          'تعذر معالجة استجابة الخادم.',
+          'Server response could not be parsed.',
+          'parse_error',
+          res.status
+        );
       }
 
-      const user = await handleResponse<YarUser>(res);
-      cachedMeUser = user;
-      lastMeTime = Date.now();
-      return user;
-    };
+      if (!envelope.success || envelope.error) {
+        const code = envelope.error?.code || `http_${res.status}`;
+        const ar = envelope.message?.ar || 'حدث خطأ أثناء معالجة الطلب.';
+        const en = envelope.message?.en || 'An error occurred during the request.';
+        throw new ApiAuthError(ar, en, code, res.status);
+      }
 
-    if (overrideToken) {
-      return run();
+      return envelope.data as T;
     }
 
-    mePromise = run().finally(() => {
-      mePromise = null;
-    });
+    let mePromise: Promise<YarUser> | null = null;
+    let cachedMeUser: YarUser | null = null;
+    let lastMeTime = 0;
 
-    return mePromise;
-  },
-
-  /**
-   * API 009 | Rotate refresh token | تجديد الجلسة بتدوير Refresh Token
-   * POST /api/v1/auth/refresh
-   */
-  async refreshToken(overrideRefreshToken?: string): Promise<AuthTokens> {
-    return await requestTokenRefresh(overrideRefreshToken);
-  },
-
-  /**
-   * API 011 | Revoke current JWT session | إنهاء الجلسة
-   * POST /api/v1/auth/logout
-   */
-  async logout(overrideToken?: string): Promise<boolean> {
-    const token = overrideToken || getAccessToken();
-    const baseUrl = getApiBaseUrl();
-
-    try {
-      if (token) {
-        await fetch(`${baseUrl}/api/v1/auth/logout`, {
+    export const authApi = {
+      /**
+       * API 004 | JWT login for admin, employee or customer | تسجيل الدخول وإصدار JWT
+       * POST /api/v1/auth/login
+       */
+      async login(payload: LoginPayload): Promise<AuthTokens> {
+        const baseUrl = getApiBaseUrl();
+        const res = await fetch(`${baseUrl}/api/v1/auth/login`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
         });
-      }
-    } catch (err) {
-      // Ensure local cleanup even if network fails
-      console.warn('[Auth] Server logout request failed:', err);
-    } finally {
-      clearStoredTokens();
-    }
 
-    return true;
-  },
+        const tokens = await handleResponse<AuthTokens>(res);
+        setStoredTokens(tokens);
+        return tokens;
+      },
 
-  /**
-   * Request or resend verification OTP
-   * POST /api/v1/auth/otp/request
-   */
-  async requestOtp(phone: string): Promise<boolean> {
-    const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/auth/otp/request`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone }),
-    });
-    const data = await handleResponse<{ request_accepted?: boolean }>(res);
-    return Boolean(data?.request_accepted);
-  },
+      /**
+       * API 012 | Read authenticated user role | بيانات المستخدم الحالي
+       * GET /api/v1/auth/me
+       */
+      async getMe(overrideToken?: string, force = false): Promise<YarUser> {
+        if (!overrideToken && !force && cachedMeUser && (Date.now() - lastMeTime < 30000)) {
+          return cachedMeUser;
+        }
 
-  /**
-   * Verify WhatsApp OTP and activate account
-   * POST /api/v1/auth/otp/verify
-   */
-  async verifyOtp(phone: string, code: string): Promise<boolean> {
-    const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/auth/otp/verify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, code }),
-    });
-    await handleResponse<GenericDataResponse | null>(res);
-    return true;
-  },
+        if (!overrideToken && mePromise) {
+          return mePromise;
+        }
 
-  /**
-   * Request password recovery via WhatsApp
-   * POST /api/v1/auth/password/request
-   */
-  async requestPasswordReset(phone: string): Promise<boolean> {
-    const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/auth/password/request`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone }),
-    });
-    const data = await handleResponse<{ request_accepted?: boolean }>(res);
-    return Boolean(data?.request_accepted);
-  },
+        const run = async (): Promise<YarUser> => {
+          const baseUrl = getApiBaseUrl();
+          const url = `${baseUrl}/api/v1/auth/me`;
+          let res: Response;
 
-  /**
-   * Confirm password reset OTP
-   * POST /api/v1/auth/password/confirm
-   */
-  async confirmPasswordReset(phone: string, code: string, newPassword: string): Promise<boolean> {
-    const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/auth/password/confirm`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        phone,
-        code,
-        new_password: newPassword,
-      }),
-    });
-    await handleResponse<GenericDataResponse | null>(res);
-    return true;
-  },
+          if (overrideToken) {
+            res = await fetch(url, {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${overrideToken}`,
+              },
+            });
+          } else {
+            res = await fetchWithAuth(url, {
+              method: 'GET',
+            });
+          }
 
-  /**
-   * Register customer and send WhatsApp OTP
-   * POST /api/v1/auth/register
-   */
-  async register(payload: RegisterPayload): Promise<GenericDataResponse | null> {
-    const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/v1/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    return await handleResponse<GenericDataResponse | null>(res);
-  },
+          const user = await handleResponse<YarUser>(res);
+          cachedMeUser = user;
+          lastMeTime = Date.now();
+          return user;
+        };
 
-  /**
-   * API 013 | Issue single-use WebSocket ticket | تذكرة اتصال Socket
-   * POST /api/v1/auth/socket-ticket
-   */
-  async getSocketTicket(): Promise<GenericDataResponse | null> {
-    const baseUrl = getApiBaseUrl();
-    const res = await fetchWithAuth(`${baseUrl}/api/v1/auth/socket-ticket`, {
-      method: 'POST',
-    });
-    return await handleResponse<GenericDataResponse | null>(res);
-  },
-};
+        if (overrideToken) {
+          return run();
+        }
+
+        mePromise = run().finally(() => {
+          mePromise = null;
+        });
+
+        return mePromise;
+      },
+
+      /**
+       * API 009 | Rotate refresh token | تجديد الجلسة بتدوير Refresh Token
+       * POST /api/v1/auth/refresh
+       */
+      async refreshToken(overrideRefreshToken?: string): Promise<AuthTokens> {
+        return await requestTokenRefresh(overrideRefreshToken);
+      },
+
+      /**
+       * API 011 | Revoke current JWT session | إنهاء الجلسة
+       * POST /api/v1/auth/logout
+       */
+      async logout(overrideToken?: string): Promise<boolean> {
+        const token = overrideToken || getAccessToken();
+        const baseUrl = getApiBaseUrl();
+
+        try {
+          if (token) {
+            await fetch(`${baseUrl}/api/v1/auth/logout`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+            });
+          }
+        } catch (err) {
+          // Ensure local cleanup even if network fails
+          console.warn('[Auth] Server logout request failed:', err);
+        } finally {
+          clearStoredTokens();
+        }
+
+        return true;
+      },
+
+      /**
+       * Request or resend verification OTP
+       * POST /api/v1/auth/otp/request
+       */
+      async requestOtp(phone: string): Promise<boolean> {
+        const baseUrl = getApiBaseUrl();
+        const res = await fetch(`${baseUrl}/api/v1/auth/otp/request`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone }),
+        });
+        const data = await handleResponse<{ request_accepted?: boolean }>(res);
+        return Boolean(data?.request_accepted);
+      },
+
+      /**
+       * Verify WhatsApp OTP and activate account
+       * POST /api/v1/auth/otp/verify
+       */
+      async verifyOtp(phone: string, code: string): Promise<boolean> {
+        const baseUrl = getApiBaseUrl();
+        const res = await fetch(`${baseUrl}/api/v1/auth/otp/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, code }),
+        });
+        await handleResponse<GenericDataResponse | null>(res);
+        return true;
+      },
+
+      /**
+       * Request password recovery via WhatsApp
+       * POST /api/v1/auth/password/request
+       */
+      async requestPasswordReset(phone: string): Promise<boolean> {
+        const baseUrl = getApiBaseUrl();
+        const res = await fetch(`${baseUrl}/api/v1/auth/password/request`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone }),
+        });
+        const data = await handleResponse<{ request_accepted?: boolean }>(res);
+        return Boolean(data?.request_accepted);
+      },
+
+      /**
+       * Confirm password reset OTP
+       * POST /api/v1/auth/password/confirm
+       */
+      async confirmPasswordReset(phone: string, code: string, newPassword: string): Promise<boolean> {
+        const baseUrl = getApiBaseUrl();
+        const res = await fetch(`${baseUrl}/api/v1/auth/password/confirm`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone,
+            code,
+            new_password: newPassword,
+          }),
+        });
+        await handleResponse<GenericDataResponse | null>(res);
+        return true;
+      },
+
+      /**
+       * Register customer and send WhatsApp OTP
+       * POST /api/v1/auth/register
+       */
+      async register(payload: RegisterPayload): Promise<GenericDataResponse | null> {
+        const baseUrl = getApiBaseUrl();
+        const res = await fetch(`${baseUrl}/api/v1/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        return await handleResponse<GenericDataResponse | null>(res);
+      },
+
+      /**
+       * API 013 | Issue single-use WebSocket ticket | تذكرة اتصال Socket
+       * POST /api/v1/auth/socket-ticket
+       */
+      async getSocketTicket(): Promise<GenericDataResponse | null> {
+        const baseUrl = getApiBaseUrl();
+        const res = await fetchWithAuth(`${baseUrl}/api/v1/auth/socket-ticket`, {
+          method: 'POST',
+        });
+        return await handleResponse<GenericDataResponse | null>(res);
+      },
+    };

@@ -117,6 +117,9 @@ function Dashboard({ session }) {
       if (editParam) next.set('edit', editParam); else next.delete('edit');
       next.delete('bookingId');
       next.delete('inquiryId');
+      if (targetPage !== 'audience') {
+        next.delete('audienceTab');
+      }
       if (extra) for (const [k, v] of Object.entries(extra)) next.set(k, v);
       return next;
     });
