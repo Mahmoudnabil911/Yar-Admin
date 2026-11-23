@@ -4,6 +4,8 @@
 import { hotelTranslations } from '../services/hotelCatalog';
 export const EN = {
   ...hotelTranslations(),
+  'جميع الأوقات': 'All time',
+  'كل الحجوزات المسجلة': 'All registered bookings',
   'بيانات الحسابات وملخص الجمهور وتقارير الأحداث من الخادم.':
     'Account data, audience summary and event reports from the server.',
   'إدارة مستخدمي لوحة التحكم وعملاء التطبيق ومتابعة تقارير النشاط والاهتمامات.':

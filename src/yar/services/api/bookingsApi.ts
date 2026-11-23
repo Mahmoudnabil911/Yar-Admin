@@ -147,16 +147,21 @@ export const bookingsApi = {
     const status = stateMap[record.state] || 'awaiting';
     const isPaid = (record.due_iqd === 0 && (record.total_iqd || 0) > 0) || (record.collected_iqd || 0) >= (record.total_iqd || 0);
 
+    const rawDate = (record as any).created_at || (record as any).create_date || (record as any).at || record.fx_date || (record as any).date || '';
+    const date = typeof rawDate === 'string' && rawDate.length >= 10 ? rawDate.slice(0, 10) : new Date().toISOString().slice(0, 10);
+
+    const customerName = record.customer_name || (record as any).name || (record.customer_id ? `عميل #${record.customer_id}` : `عميل #${record.id}`);
+
     return {
       ...record,
       id: record.reference || `YAR-BK-${record.id}`,
       rawId: record.id,
-      customer: record.customer_name || '',
-      phone: record.customer_phone || '',
+      customer: customerName,
+      phone: record.customer_phone || (record as any).phone || '',
       service: record.service_type || 'hotel',
-      route: '',
-      detail: '',
-      date: record.created_at ? record.created_at.slice(0, 10) : '',
+      route: (record as any).route || record.reference || `طلب #${record.id}`,
+      detail: (record as any).detail || `خدمة ${record.service_type || 'سياحية'}`,
+      date,
       amount: record.total_iqd || 0,
       currency: 'IQD',
       status,
