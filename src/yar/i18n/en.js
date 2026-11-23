@@ -2119,4 +2119,13 @@ export const EN = {
   'الانتقال إلى أرصدة وحركات المورّد': 'Navigate to supplier balances and ledger',
   'لا يوجد موردون مسجلون على الخادم حالياً. يرجى إضافة مورّد أولاً باستخدام زر «إضافة مورّد».':
     'No suppliers currently registered on the server. Please add a supplier first using "Add supplier".',
+  '• بيانات حية ومباشرة من الخادم (API 120 / 122 / 123)': '• Live server data (API 120 / 122 / 123)',
+  'جاري تحميل الرسائل من الخادم…': 'Loading inquiries from server…',
+  'لم يتم استقبال أي رسائل دعم أو استفسارات من العملاء حتى الآن.': 'No customer support inquiries received yet.',
+  'لا توجد نتائج مطابقة لمعايير البحث.': 'No matching inquiries for current filters.',
+  'ملاحظات داخلية وردود الدعم (API 122)': 'Internal Notes & Replies (API 122)',
+  'لا توجد ملاحظات داخلية مضافة لهذه الرسالة بعد.': 'No internal notes added to this inquiry yet.',
+  'اكتب ملاحظة داخلية أو رد دعم لحفظه على الخادم...': 'Write internal note or reply to save to server...',
+  'إضافة ملاحظة على الخادم': 'Add note to server',
+  'استفسار بدون عنوان': 'Untitled inquiry',
 };
