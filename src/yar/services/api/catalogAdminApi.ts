@@ -391,7 +391,7 @@ export const catalogAdminApi = {
    */
   async createService(payload: {
     name: string;
-    service_type: 'package' | 'tour' | 'transfer' | 'car';
+    service_type: 'package' | 'tour' | 'transfer' | 'car' | string;
     description?: string;
     city?: string;
     pickup_location?: string;
@@ -400,20 +400,36 @@ export const catalogAdminApi = {
     capacity?: number;
     price_usd: number;
     supplier_cost_usd?: number;
+    supplier_id?: number;
+    published?: boolean;
+    active?: boolean;
   }): Promise<AdminServiceItem> {
     invalidateCatalogCache();
     const baseUrl = getApiBaseUrl();
     const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/services`, {
       method: 'POST',
       body: JSON.stringify({
-        ...payload,
         active: true,
         published: true,
+        ...payload,
       }),
     });
     const data = await handleResponse<{ id: number } | number>(res, 'فشل إنشاء الخدمة على الخادم.');
     const id = typeof data === 'object' && data !== null && 'id' in data ? data.id : (data as number);
-    return { ...payload, id, active: true, published: true };
+    return { active: true, published: true, ...payload, id };
+  },
+
+  /**
+   * API 080 | تعديل الباقات والنقل والجولات والسيارات | PATCH /api/v1/admin/services/{record_id}
+   */
+  async updateService(recordId: number, payload: Partial<AdminServiceItem>): Promise<{ id: number }> {
+    invalidateCatalogCache();
+    const baseUrl = getApiBaseUrl();
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/services/${recordId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse<{ id: number }>(res, 'فشل تعديل بيانات الخدمة على الخادم.');
   },
 
   /**
@@ -427,6 +443,47 @@ export const catalogAdminApi = {
       });
       return await handleResponse<{ items: AdminServiceOptionItem[] }>(res, 'فشل جلب خيارات الخدمات.');
     }, 10000, force);
+  },
+
+  /**
+   * API 082 | إنشاء خيارات الخدمات | POST /api/v1/admin/service-options
+   */
+  async createServiceOption(payload: {
+    service_id: number;
+    name: string;
+    price_usd: number;
+    supplier_cost_usd?: number;
+    capacity?: number;
+    nights?: number;
+    hotel_id?: number;
+    position?: number;
+    active?: boolean;
+  }): Promise<AdminServiceOptionItem> {
+    invalidateCatalogCache();
+    const baseUrl = getApiBaseUrl();
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/service-options`, {
+      method: 'POST',
+      body: JSON.stringify({
+        active: true,
+        ...payload,
+      }),
+    });
+    const data = await handleResponse<{ id: number } | number>(res, 'فشل إنشاء خيار الخدمة على الخادم.');
+    const id = typeof data === 'object' && data !== null && 'id' in data ? data.id : (data as number);
+    return { active: true, ...payload, id };
+  },
+
+  /**
+   * API 083 | تعديل خيارات الخدمات | PATCH /api/v1/admin/service-options/{record_id}
+   */
+  async updateServiceOption(recordId: number, payload: Partial<AdminServiceOptionItem>): Promise<{ id: number }> {
+    invalidateCatalogCache();
+    const baseUrl = getApiBaseUrl();
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/service-options/${recordId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse<{ id: number }>(res, 'فشل تعديل خيار الخدمة على الخادم.');
   },
 
   /**

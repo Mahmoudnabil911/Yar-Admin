@@ -4,6 +4,7 @@ import { useToast } from '../../components/ui/Toast';
 import { can } from '../../auth/access';
 import { bookingsApi } from '../../services/api/bookingsApi';
 import { financeApi } from '../../services/api/financeApi';
+import { NumberInput } from '../../components/ui/NumberInput';
 
 const money = value => `${new Intl.NumberFormat('en-US').format(Number(value) || 0)} د.ع`;
 const stateLabel = state => ({ pending: 'قيد المراجعة', approved: 'معتمد', rejected: 'مرفوض', paid: 'تم الصرف' }[state] || state || '—');
@@ -126,7 +127,7 @@ export function PaymentDetailsModal({ bookingId, onBackToBooking }) {
 
         {due > 0 && booking.state !== 'cancelled' && (
           <form className="ops-form-grid" onSubmit={submitReceipt}>
-            <label className="ops-field"><span>المبلغ بالدينار العراقي</span><input type="number" min="1" max={due} step="1" required value={amount} onChange={e => setAmount(e.target.value)} /></label>
+            <label className="ops-field"><span>المبلغ بالدينار العراقي</span><NumberInput allowDecimals={false} min={1} max={due} required value={amount} onChange={e => setAmount(e.target.value)} placeholder="مثال: 1,500,000" /></label>
             <label className="ops-field"><span>طريقة التحصيل</span><select value={method} onChange={e => setMethod(e.target.value)}><option value="office">المكتب</option><option value="bank">تحويل بنكي</option></select></label>
             <label className="ops-field wide"><span>مرجع الإيصال</span><input required value={paymentReference} onChange={e => setPaymentReference(e.target.value)} /></label>
             <button className="button primary wide" disabled={busy}>تسجيل إيصال معلّق للمراجعة</button>
@@ -151,7 +152,7 @@ export function PaymentDetailsModal({ bookingId, onBackToBooking }) {
         )) : <p className="ops-note">لا توجد طلبات استرداد لهذا الحجز.</p>}
         {canRefund && booking.state === 'cancelled' && collected - refunded > 0 && (
           <form className="ops-form-grid" onSubmit={submitRefund}>
-            <label className="ops-field"><span>مبلغ الاسترداد IQD</span><input type="number" min="1" max={collected - refunded} step="1" required value={refundAmount} onChange={e => setRefundAmount(e.target.value)} /></label>
+            <label className="ops-field"><span>مبلغ الاسترداد IQD</span><NumberInput allowDecimals={false} min={1} max={collected - refunded} required value={refundAmount} onChange={e => setRefundAmount(e.target.value)} placeholder="مثال: 500,000" /></label>
             <label className="ops-field wide"><span>سبب الاسترداد</span><textarea required value={refundReason} onChange={e => setRefundReason(e.target.value)} /></label>
             <button className="button secondary wide" disabled={busy}>إنشاء طلب استرداد معلّق</button>
             <p className="ops-note wide">إنشاء الطلب لا يعني صرفه؛ يجب تسجيل مرجع التحويل عند اعتماده.</p>

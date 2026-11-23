@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Search, Check, ChevronDown } from 'lucide-react';
 import { usePrefs } from '../../i18n/prefs';
 import { FALLBACK_ICON, CATEGORY_ICONS } from './hotelIcons';
+import { NumberInput } from '../../components/ui/NumberInput';
 
 export function useHotelWords() {
   const { lang } = usePrefs();
@@ -25,7 +26,7 @@ export function Field({ label, wide, hint, req, children }) {
 export const TextIn = ({ value, onChange, ...rest }) => <input type="text" value={value ?? ''} onChange={e => onChange(e.target.value)} {...rest} />;
 export const AreaIn = ({ value, onChange, ...rest }) => <textarea value={value ?? ''} onChange={e => onChange(e.target.value)} {...rest} />;
 export const NumIn = ({ value, onChange, ...rest }) => (
-  <input type="number" inputMode="decimal" value={value ?? ''} onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))} {...rest} />
+  <NumberInput value={value ?? ''} onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))} {...rest} />
 );
 export const DateIn = ({ value, onChange, ...rest }) => <input type="date" value={value ?? ''} onChange={e => onChange(e.target.value)} {...rest} />;
 

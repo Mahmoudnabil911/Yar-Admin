@@ -3,6 +3,7 @@ import { pricingEngine as E } from '../../services/models';
 import { normalize } from '../../services/storage/pricingStorage';
 import Drawer from '../../components/ui/Drawer';
 import { Icon } from '../../components/ui/Icon';
+import { NumberInput } from '../../components/ui/NumberInput';
 
 const kindLabels = { markup: 'هامش ربح', discount: 'خصم' };
 const flightScopeKeys = ['routeFrom', 'routeTo', 'carrier', 'cabin'];
@@ -281,14 +282,11 @@ export default function PricingRuleModal({
 
           <label className="pr-field" htmlFor="pr-rule-value">
             <span>{valueLabel}</span>
-            <input
+            <NumberInput
               id="pr-rule-value"
-              type="number"
-              step="any"
-              min="0"
-              max={isFixed ? '' : formData.kind === 'discount' ? '100' : '1000'}
+              min={0}
+              max={isFixed ? undefined : formData.kind === 'discount' ? 100 : 1000}
               required
-              inputMode="decimal"
               value={formData.value}
               onChange={e => setFormData({ ...formData, value: e.target.value })}
             />

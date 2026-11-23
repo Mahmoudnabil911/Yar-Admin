@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { suppliersApi } from '../../services/api/suppliersApi';
 import { useToast } from '../../components/ui/Toast';
+import { NumberInput } from '../../components/ui/NumberInput';
 
 export function TopUpModal({ initialProviderId = '', initialCurrency = 'USD', providers = [], onClose, onDone }) {
   const toast = useToast();
@@ -77,13 +78,11 @@ export function TopUpModal({ initialProviderId = '', initialCurrency = 'USD', pr
 
           <label className="ops-field">
             <span>مبلغ الإيداع ($)</span>
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
+            <NumberInput
+              min={0.01}
               value={amount}
               onChange={e => setAmount(e.target.value)}
-              placeholder="المبلغ بالدولار"
+              placeholder="مثال: 1,000"
               required
               disabled={submitting}
             />

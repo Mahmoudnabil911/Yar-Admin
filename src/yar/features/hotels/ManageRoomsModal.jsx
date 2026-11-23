@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Drawer } from '../../components/ui/Drawer';
 import { useToast } from '../../components/ui/Toast';
+import { NumberInput } from '../../components/ui/NumberInput';
 import { catalogAdminApi } from '../../services/api/catalogAdminApi';
 
 export function ManageRoomsModal({
@@ -221,10 +222,10 @@ export function ManageRoomsModal({
 
               <label className="ops-field">
                 <span>السعة (بالغين)</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="10"
+                <NumberInput
+                  allowDecimals={false}
+                  min={1}
+                  max={10}
                   value={roomOccupancy}
                   onChange={e => setRoomOccupancy(e.target.value)}
                   placeholder="مثال: 2"
@@ -233,10 +234,10 @@ export function ManageRoomsModal({
 
               <label className="ops-field">
                 <span>إجمالي الغرف المتاحة</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="500"
+                <NumberInput
+                  allowDecimals={false}
+                  min={1}
+                  max={500}
                   value={roomUnits}
                   onChange={e => setRoomUnits(e.target.value)}
                   placeholder="مثال: 10"
@@ -376,10 +377,8 @@ export function ManageRoomsModal({
 
                         <label className="ops-field">
                           <span>سعر البيع للعميل ($ دولار) *</span>
-                          <input
-                            type="number"
-                            min="1"
-                            step="0.01"
+                          <NumberInput
+                            min={1}
                             value={ratePriceUsd}
                             onChange={e => setRatePriceUsd(e.target.value)}
                             placeholder="مثال: 100"
@@ -389,10 +388,8 @@ export function ManageRoomsModal({
 
                         <label className="ops-field">
                           <span>تكلفة المورّد ($ دولار)</span>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
+                          <NumberInput
+                            min={0}
                             value={rateSupplierCostUsd}
                             onChange={e => setRateSupplierCostUsd(e.target.value)}
                             placeholder="مثال: 70"

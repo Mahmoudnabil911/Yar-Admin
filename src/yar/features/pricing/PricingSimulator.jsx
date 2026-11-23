@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { pricingEngine as E } from '../../services/models';
 import { Icon } from '../../components/ui/Icon';
+import { NumberInput } from '../../components/ui/NumberInput';
 
 const currencyLabels = { IQD: 'د.ع', USD: '$' };
 
@@ -89,12 +90,9 @@ export default function PricingSimulator({ rules, providers }) {
         <label className="pr-field pr-wide" htmlFor="pr-sim-cost">
           <span>تكلفة المزوّد</span>
           <div className="pr-cost-input">
-            <input
+            <NumberInput
               id="pr-sim-cost"
-              type="number"
-              min="0"
-              step="any"
-              inputMode="decimal"
+              min={0}
               value={sim.cost}
               onChange={e => setSim(s => ({ ...s, cost: e.target.value }))}
             />
