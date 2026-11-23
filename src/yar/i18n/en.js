@@ -4,6 +4,14 @@
 import { hotelTranslations } from '../services/hotelCatalog';
 export const EN = {
   ...hotelTranslations(),
+  'الصادرة / المؤكدة': 'Issued / Confirmed',
+  'توزيع الخدمات المجمّع (API 113)': 'Aggregated service distribution (API 113)',
+  'توزيع حالات الحجوزات (API 113)': 'Aggregated booking states (API 113)',
+  'تكلفة الموردين: ': 'Supplier cost: ',
+  'تحليلات الحجوزات والمبالغ المجمعة مباشرة من خادم Odoo.':
+    'Aggregated booking and amount analytics directly from Odoo server.',
+  'بيانات مباشرة من الخادم · يعرض تفاصيل الحجوزات والفلاتر التفاعلية.':
+    'Live server data · Displays booking details with interactive filters.',
   'جميع الأوقات': 'All time',
   'كل الحجوزات المسجلة': 'All registered bookings',
   'بيانات الحسابات وملخص الجمهور وتقارير الأحداث من الخادم.':

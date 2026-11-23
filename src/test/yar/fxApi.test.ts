@@ -107,6 +107,38 @@ describe('Live Odoo APIs: FX Rates and Overview Reports', () => {
         expect.any(Object)
       );
     });
+
+    it('fetches bookings report aggregates (API 113)', async () => {
+      const mockReport = {
+        count: 3,
+        by_state: { confirmed: 1, cancelled: 2 },
+        by_service: { hotel: 1, package: 1, tour: 1 },
+        sales_iqd: 998580.0,
+        supplier_cost_usd: 440.0,
+        collected_iqd: 0.0,
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          data: mockReport,
+          message: { ar: 'تمت العملية بنجاح', en: 'Operation completed' },
+          error: null,
+          time_zone: 'Asia/Baghdad',
+        }),
+      });
+
+      const res = await reportsApi.getBookingsReport(true);
+      expect(res.count).toBe(3);
+      expect(res.sales_iqd).toBe(998580.0);
+      expect(res.by_service.hotel).toBe(1);
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/v1/reports/bookings'),
+        expect.any(Object)
+      );
+    });
   });
 });
 

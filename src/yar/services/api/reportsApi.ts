@@ -1,7 +1,7 @@
 /**
  * YAR Odoo 18 Reports & Overview API client
+ * API 113 | Booking aggregates by state/service | تحليلات الحجوزات
  * API 114 | Dashboard booking summary | ملخص الحجوزات للوحة الإدارة
- * Endpoint: GET /api/v1/reports/overview
  */
 
 import { getApiBaseUrl, fetchWithAuth, ApiAuthError } from './authApi';
@@ -12,6 +12,30 @@ export interface DashboardSummaryData {
   issued_count: number;
   sales_total_iqd: number;
   supplier_cost_total_usd: number;
+}
+
+export interface BookingsReportData {
+  count: number;
+  by_state: {
+    pending?: number;
+    processing?: number;
+    confirmed?: number;
+    issued?: number;
+    cancelled?: number;
+    [key: string]: number | undefined;
+  };
+  by_service: {
+    flight?: number;
+    hotel?: number;
+    package?: number;
+    car?: number;
+    transfer?: number;
+    tour?: number;
+    [key: string]: number | undefined;
+  };
+  sales_iqd: number;
+  supplier_cost_usd: number;
+  collected_iqd: number;
 }
 
 export interface DashboardSummaryResponse {
@@ -43,6 +67,10 @@ let overviewPromise: Promise<DashboardSummaryData> | null = null;
 let cachedOverview: DashboardSummaryData | null = null;
 let lastOverviewTime = 0;
 
+let bookingsReportPromise: Promise<BookingsReportData> | null = null;
+let cachedBookingsReport: BookingsReportData | null = null;
+let lastBookingsReportTime = 0;
+
 export const reportsApi = {
   /**
    * API 114 | Dashboard booking summary | ملخص الحجوزات للوحة الإدارة
@@ -72,5 +100,33 @@ export const reportsApi = {
 
     return overviewPromise;
   },
-};
 
+  /**
+   * API 113 | Booking aggregates by state/service | تحليلات الحجوزات
+   * GET /api/v1/reports/bookings
+   */
+  async getBookingsReport(force = false): Promise<BookingsReportData> {
+    if (!force && cachedBookingsReport && (Date.now() - lastBookingsReportTime < 10000)) {
+      return cachedBookingsReport;
+    }
+
+    if (!force && bookingsReportPromise) {
+      return bookingsReportPromise;
+    }
+
+    bookingsReportPromise = (async () => {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetchWithAuth(`${baseUrl}/api/v1/reports/bookings`, {
+        method: 'GET',
+      });
+      const data = await handleReportsResponse<BookingsReportData>(res);
+      cachedBookingsReport = data;
+      lastBookingsReportTime = Date.now();
+      return data;
+    })().finally(() => {
+      bookingsReportPromise = null;
+    });
+
+    return bookingsReportPromise;
+  },
+};
