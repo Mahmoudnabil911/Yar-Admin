@@ -185,11 +185,22 @@ export async function requestTokenRefresh(overrideRefreshToken?: string): Promis
   return refreshPromise;
 }
 
+// ---------------------------------------------------------------------------
+// Backoff helper — exponential delay with jitter.
+// attempt=0 → ~400ms, attempt=1 → ~800ms, attempt=2 → ~1600ms (capped 3s)
+// ---------------------------------------------------------------------------
+function _backoffDelay(attempt: number): number {
+  const base = Math.min(400 * Math.pow(2, attempt), 3000);
+  return base + Math.random() * 200;
+}
+
 /**
  * Universal authenticated fetch wrapper.
  * 1. Attaches Authorization: Bearer <token>.
  * 2. Proactively refreshes if token is expired or close to expiring (within 60s).
- * 3. Intercepts 401 responses, executes single-flight token rotation, and replays the request once.
+ * 3. Enforces an internal 10s timeout per attempt so requests never hang indefinitely in (pending).
+ * 4. Intercepts 401 responses, executes single-flight token rotation, and replays once.
+ * 5. Retries GET/HEAD requests up to 3× on 502/503/504 (gateway errors), 429, or network drops/timeouts.
  */
 export async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
   let token = getAccessToken();
@@ -225,44 +236,71 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}): Pro
   };
 
   const method = (options.method || 'GET').toUpperCase();
-  const canRetryRead = (method === 'GET' || method === 'HEAD') && !options.body;
-  const send = (authToken: string | null) => fetch(url, {
-    ...options,
-    headers: buildHeaders(authToken),
-  });
-  let res: Response;
-  let retriedRead = false;
-  try {
-    res = await send(token);
-  } catch (err) {
-    if (!canRetryRead) throw err;
-    retriedRead = true;
-    await new Promise(resolve => setTimeout(resolve, 700));
-    res = await send(token);
-  }
+  // Only retry idempotent reads — never replay POSTs / mutations
+  const canRetry = (method === 'GET' || method === 'HEAD') && !options.body;
+  const MAX_ATTEMPTS = canRetry ? 4 : 1; // 1 initial + up to 3 retries for reads
 
-  // The local Vite proxy can receive a transient upstream socket hang-up.
-  // Retry only idempotent reads; never replay booking writes or other mutations.
-  if (canRetryRead && !retriedRead && (res.status === 502 || res.status === 504)) {
-    await new Promise(resolve => setTimeout(resolve, 700));
-    res = await send(token);
-  }
-
-  // If 401 Unauthorized, attempt rotation and retry once
-  if (res.status === 401 && getRefreshToken()) {
-    try {
-      const refreshed = await requestTokenRefresh();
-      res = await fetch(url, {
-        ...options,
-        headers: buildHeaders(refreshed.access_token),
-      });
-    } catch {
-      // Refresh failed; return original 401 response
-      return res;
+  const send = (authToken: string | null) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    if (options.signal) {
+      if (options.signal.aborted) {
+        controller.abort();
+      } else {
+        options.signal.addEventListener('abort', () => controller.abort(), { once: true });
+      }
     }
+    return fetch(url, {
+      ...options,
+      headers: buildHeaders(authToken),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timer));
+  };
+
+  let res: Response;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      res = await send(token);
+    } catch (networkErr) {
+      // Network-level failure, socket drop, or 10s timeout
+      if (!canRetry || attempt >= MAX_ATTEMPTS - 1) throw networkErr;
+      await new Promise(r => setTimeout(r, _backoffDelay(attempt)));
+      continue;
+    }
+
+    // 401 → rotate token once (not counted as a retry attempt)
+    if (res.status === 401 && getRefreshToken()) {
+      try {
+        const refreshed = await requestTokenRefresh();
+        token = refreshed.access_token;
+        res = await send(token);
+      } catch {
+        // Refresh failed; return 401 so caller handles it
+      }
+      break;
+    }
+
+    // Success or non-retryable client errors → return immediately
+    if (res.ok || (res.status >= 400 && res.status < 500 && res.status !== 429)) break;
+
+    // 429 Rate-limited — respect Retry-After header
+    if (res.status === 429 && canRetry && attempt < MAX_ATTEMPTS - 1) {
+      const retryAfterSec = Number(res.headers.get('Retry-After') || 2);
+      await new Promise(r => setTimeout(r, retryAfterSec * 1000));
+      continue;
+    }
+
+    // 502 / 503 / 504 — transient gateway errors, back off and retry
+    if ((res.status === 502 || res.status === 503 || res.status === 504) && canRetry && attempt < MAX_ATTEMPTS - 1) {
+      await new Promise(r => setTimeout(r, _backoffDelay(attempt)));
+      continue;
+    }
+
+    // Any other status or last attempt — break
+    break;
   }
 
-  return res;
+  return res!;
 }
 
 const DEFAULT_BASE_URL = 'https://yar-odoo.samaalrosha.com';

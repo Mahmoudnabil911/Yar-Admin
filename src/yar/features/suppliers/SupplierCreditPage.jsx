@@ -10,11 +10,13 @@ import { useToast } from '../../components/ui/Toast';
 import { suppliersApi } from '../../services/api/suppliersApi';
 
 const labels = {
+  topup: 'شحن رصيد',
   deposit: 'شحن رصيد',
-  issue: 'خصم إصدار',
-  return: 'إرجاع إلى الرصيد',
   credit: 'شحن رصيد',
+  issue: 'خصم إصدار',
   debit: 'خصم إصدار',
+  return: 'إرجاع إلى الرصيد',
+  refund: 'إرجاع إلى الرصيد',
 };
 
 export function SupplierCreditPage({ onNavigate, onOpenBooking, searchQuery = '', onSearchChange }) {
@@ -134,16 +136,49 @@ export function SupplierCreditPage({ onNavigate, onOpenBooking, searchQuery = ''
   }, [liveSuppliers, providerFilter, currencyFilter, searchQuery]);
 
   const handleOpenAccount = (pId, cur = 'USD', name = '', balance = 0) => {
+    const s = liveSuppliers.find(x => String(x.id) === String(pId));
+    const resolvedName = name || s?.name || `مورّد #${pId}`;
+    const resolvedBal = balance || Number(s?.balance_usd ?? s?.balance ?? 0);
     setAccountDrawer({
       open: true,
       providerId: String(pId),
       currency: cur,
-      name,
-      balance,
+      name: resolvedName,
+      balance: resolvedBal,
     });
-    setDrawerBalance(balance);
+    setDrawerBalance(resolvedBal);
     setDrawerItems([]);
   };
+
+  // Process and calculate running balances for drawer ledger items (API 066)
+  const processedDrawerItems = useMemo(() => {
+    if (!drawerItems || drawerItems.length === 0) return [];
+
+    // Sort chronologically (oldest to newest) to calculate running balance accurately
+    const sorted = [...drawerItems].sort((a, b) => {
+      const timeA = new Date(a.at || a.created_at || a.created_at_utc || 0).getTime() || (Number(a.id) || 0);
+      const timeB = new Date(b.at || b.created_at || b.created_at_utc || 0).getTime() || (Number(b.id) || 0);
+      return timeA - timeB;
+    });
+
+    let running = 0;
+    const computed = sorted.map(item => {
+      const isIssue = item.type === 'issue' || item.type === 'debit';
+      const amount = Number(item.amount_usd ?? item.amount ?? 0);
+      if (isIssue) {
+        running -= amount;
+      } else {
+        running += amount;
+      }
+      return {
+        ...item,
+        calculatedAfter: item.balance_after_usd != null ? Number(item.balance_after_usd) : running,
+      };
+    });
+
+    // Return newest first for display
+    return computed.reverse();
+  }, [drawerItems]);
 
   const handleOpenTopUp = (pId = '', cur = 'USD') => {
     setTopUpTarget({ providerId: String(pId), currency: cur });
@@ -455,7 +490,7 @@ export function SupplierCreditPage({ onNavigate, onOpenBooking, searchQuery = ''
           open={accountDrawer.open}
           onClose={() => setAccountDrawer({ open: false, providerId: '', currency: 'USD', name: '', balance: 0 })}
           eyebrow="حساب المورّد · رصيد مسبق الدفع (API 066)"
-          title={`${accountDrawer.name || 'المورّد'} · ${accountDrawer.currency}`}
+          title={`${accountDrawer.name || (liveSuppliers.find(s => String(s.id) === String(accountDrawer.providerId))?.name) || 'المورّد'} · ${accountDrawer.currency}`}
         >
           <div className="credit-balance" style={{ marginBottom: 16 }}>
             <span style={{ fontSize: 12, color: 'var(--muted)', display: 'block' }}>الرصيد المتاح لدى المورّد</span>
@@ -513,19 +548,21 @@ export function SupplierCreditPage({ onNavigate, onOpenBooking, searchQuery = ''
                   <thead>
                     <tr>
                       <th>الحركة / التاريخ</th>
-                      <th>مدين · خصم</th>
-                      <th>دائن · شحن</th>
+                      <th>خصم</th>
+                      <th>شحن</th>
                       <th>الرصيد</th>
                       <th>المرجع / الطلب</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {drawerItems.length > 0 ? (
-                      drawerItems.map((e, idx) => {
+                    {processedDrawerItems.length > 0 ? (
+                      processedDrawerItems.map((e, idx) => {
                         const isIssue = e.type === 'issue' || e.type === 'debit';
-                        const isReturn = e.type === 'return';
-                        const isDeposit = e.type === 'deposit' || e.type === 'credit' || !e.type;
-                        const dateStr = e.created_at || e.created_at_utc || e.at;
+                        const isReturn = e.type === 'return' || e.type === 'refund';
+                        const isDeposit = e.type === 'deposit' || e.type === 'credit' || e.type === 'topup' || !e.type;
+                        const dateStr = e.at || e.created_at || e.created_at_utc;
+                        const amountVal = Number(e.amount_usd ?? e.amount ?? 0);
+                        const afterVal = e.calculatedAfter ?? (e.balance_after_usd ?? e.after ?? 0);
                         return (
                           <tr key={e.id || idx}>
                             <td>
@@ -540,16 +577,16 @@ export function SupplierCreditPage({ onNavigate, onOpenBooking, searchQuery = ''
                             </td>
                             <td>
                               <bdi style={{ color: isIssue ? 'var(--c-924b42)' : 'inherit' }}>
-                                {isIssue ? money(e.amount_usd ?? e.amount, accountDrawer.currency) : '—'}
+                                {isIssue ? money(amountVal, accountDrawer.currency) : '—'}
                               </bdi>
                             </td>
                             <td>
                               <bdi style={{ color: (isDeposit || isReturn) ? 'var(--c-2b5a26)' : 'inherit' }}>
-                                {(isDeposit || isReturn) ? money(e.amount_usd ?? e.amount, accountDrawer.currency) : '—'}
+                                {(isDeposit || isReturn) ? money(amountVal, accountDrawer.currency) : '—'}
                               </bdi>
                             </td>
                             <td>
-                              <strong>{money(e.balance_after_usd ?? e.after ?? 0, accountDrawer.currency)}</strong>
+                              <strong>{money(afterVal, accountDrawer.currency)}</strong>
                             </td>
                             <td>
                               <bdi>{e.reference || '—'}</bdi>

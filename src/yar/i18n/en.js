@@ -2067,6 +2067,8 @@ export const EN = {
   'اضغط على «كشف الحساب» أمام أي مورّد في الجدول أعلاه لعرض وتدقيق كشف حركاته المباشرة (API 066).':
     'Click "Statement" next to any supplier in the table above to view and audit its live transactions (API 066).',
   'حساب المورّد · رصيد مسبق الدفع (API 066)': 'Supplier Account · Prepaid Balance (API 066)',
+  خصم: 'Deduction',
+  شحن: 'Top-up',
   'مدين · خصم': 'Debit · Deduction',
   'دائن · شحن': 'Credit · Top-up',
   'المرجع / الطلب': 'Reference / Order',

@@ -8,6 +8,18 @@
 // hosting already compresses at the edge.
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import https from "node:https";
+
+// Connection pool agent for upstream Odoo backend:
+// Odoo/Cloudflare drops sockets when more than 2 concurrent TLS handshakes occur.
+// Reusing persistent connections via keepAlive and capping maxSockets to 2
+// eliminates socket resets (ERR_CONNECTION_RESET / 502 Bad Gateway).
+const upstreamAgent = new https.Agent({
+  keepAlive: true,
+  maxSockets: 2,
+  maxFreeSockets: 2,
+  timeout: 30000,
+});
 
 export default defineConfig({
   vite: {
@@ -17,6 +29,7 @@ export default defineConfig({
           target: 'https://yar-odoo.samaalrosha.com',
           changeOrigin: true,
           secure: false,
+          agent: upstreamAgent,
           configure: (proxy) => {
             proxy.on('error', (err, _req, res) => {
               // Gracefully handle upstream drops/timeouts without crashing
