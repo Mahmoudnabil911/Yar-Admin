@@ -59,10 +59,28 @@ export const audienceApi = {
     );
   },
   async getBehaviorReport(): Promise<BehaviorReport> {
-    return read(
-      await fetchWithAuth(`${getApiBaseUrl()}/api/v1/admin/reports/behavior`),
-      'تعذر جلب تقرير سلوك المستخدمين.',
-    );
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    try {
+      return await read(
+        await fetchWithAuth(`${getApiBaseUrl()}/api/v1/admin/reports/behavior`, {
+          signal: controller.signal,
+        }),
+        'تعذر جلب تقرير سلوك المستخدمين.',
+      );
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        throw new ApiAuthError(
+          'استغرق الخادم وقتاً أطول من المتوقع، يرجى إعادة المحاولة.',
+          'Request timed out, please try again.',
+          'timeout',
+          504
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
   },
   async updateUser(
     id: number,

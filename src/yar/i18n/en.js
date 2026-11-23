@@ -6,11 +6,51 @@ export const EN = {
   ...hotelTranslations(),
   'بيانات الحسابات وملخص الجمهور وتقارير الأحداث من الخادم.':
     'Account data, audience summary and event reports from the server.',
+  'إدارة مستخدمي لوحة التحكم وعملاء التطبيق ومتابعة تقارير النشاط والاهتمامات.':
+    'Manage dashboard staff, app customers, and monitor activity and demand reports.',
   'بيانات مباشرة من الخادم': 'Live data from server',
-  'قائمة API 092 مع ملخص الحسابات وعدد الحجوزات من API 115.':
-    'API 092 account list with account summary and booking counts from API 115.',
-  'ملخص مجمّع من API 118؛ لا يعرض سجلات أو أحداث أفراد.':
-    'Aggregated summary from API 118; individual records and events are not exposed.',
+  'مستخدمو لوحة التحكم': 'Dashboard users',
+  'حسابات المديرين وموظفي الحجوزات المصرح لهم بالدخول إلى لوحة الإدارة.':
+    'Accounts for managers and booking staff authorized to access the admin dashboard.',
+  'كل أدوار الإدارة': 'All dashboard roles',
+  'جاري تحميل مستخدمي لوحة التحكم...': 'Loading dashboard users...',
+  'عملاء ومستخدمو التطبيق': 'App customers and users',
+  'قائمة عملاء ومستخدمي تطبيق المسافر المسجلين وسجل حجوزاتهم.':
+    'Registered traveler app customers and their booking history.',
+  'ابحث باسم العميل أو رقم الهاتف أو المعرّف…': 'Search by customer name, phone, or ID...',
+  'جاري تحميل مستخدمي التطبيق...': 'Loading app users...',
+  'تعذر جلب مستخدمي التطبيق': 'Could not fetch app users',
+  'العميل': 'Customer',
+  'لا يوجد عملاء أو مستخدمو تطبيق': 'No app customers or users found',
+  'لم يتم العثور على حسابات عملاء مسجلة حالياً.': 'No registered customer accounts found currently.',
+  'تحليلات وإحصاءات استخدام التطبيق ومؤشرات العمليات.':
+    'App usage analytics, statistics, and operations indicators.',
+  'التقارير والتحليلات قيد التطوير': 'Reports and analytics under development',
+  'لم يتم تجهيز خوارزميات وتحليلات التقارير بعد من قِبل مطور الـ Backend.':
+    'Reporting and analytics algorithms have not yet been prepared by the backend developer.',
+  'تحليل سلوك واهتمامات مستخدمي التطبيق والأكثر طلباً.':
+    'Analysis of app user behavior, demand trends, and top interests.',
+  'تحليلات الطلب والاهتمامات قيد التجهيز': 'Demand and insights analytics in preparation',
+  'سيتم ربط هذا القسم فور اكتمال خوارزميات تحليل طلبات واهتمامات مستخدمي التطبيق في الـ Backend.':
+    'This section will be connected once the app user demand and interest algorithms are completed on the backend.',
+  'تعذر جلب البيانات من الخادم.': 'Could not fetch data from the server.',
+  'ملخص نشاط الزوار': 'Visitor activity summary',
+  'إحصاءات الزيارات ونشاط استخدام التطبيق': 'Visitor statistics and app usage activity',
+  'لا توجد بيانات زوار حالياً': 'No visitor data currently available',
+  'لم يتم تسجيل أي زيارات أو نشاط في هذه الفترة.': 'No visits or activity recorded in this period.',
+  'تقارير وتحليل الأحداث': 'Event reports and analytics',
+  'تحليلات الأحداث ومؤشرات تفاعل المستخدمين': 'Event analytics and user engagement indicators',
+  'لا تتوفر تقارير حالياً': 'No reports currently available',
+  'لا توجد بيانات أو أحداث مسجلة لعرض التقرير.': 'No data or events recorded to display report.',
+  'الطلب والاهتمامات': 'Demand and insights',
+  'تحليل مؤشرات البحث والأقسام الأكثر اهتماماً': 'Analysis of search trends and top interest sections',
+  'لا تتوفر بيانات اهتمامات': 'No insights data available',
+  'لم يتم تسجيل طلبات أو عمليات بحث كافية بعد.': 'Not enough requests or searches recorded yet.',
+  'لا تتوفر بيانات حالياً': 'No data currently available',
+  'لم يتم تسجيل أي أحداث أو نشاط بعد.': 'No events or activity recorded yet.',
+  'تعذر جلب التقرير': 'Could not fetch the report',
+  'تعذر جلب المستخدمين': 'Could not fetch users',
+  'تعذر جلب البيانات': 'Could not fetch data',
   'الخادم يعلّم هذه النتائج كبيانات اصطناعية.': 'The server marks these results as synthetic data.',
   'لا توجد أحداث مسجلة في التقرير.': 'No events are recorded in this report.',
   'لا توجد أقسام في التقرير.': 'No sections are included in this report.',

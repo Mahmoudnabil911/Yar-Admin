@@ -182,6 +182,8 @@ export const bookingsApi = {
     const baseUrl = getApiBaseUrl();
     const query = new URLSearchParams();
     if (params.limit != null) query.set('limit', String(params.limit));
+    if (params.offset != null) query.set('offset', String(params.offset));
+    if (params.status) query.set('status', params.status);
 
     const queryString = query.toString();
     const cacheKey = queryString || '__default__';
