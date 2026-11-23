@@ -146,9 +146,7 @@ export default function AudiencePage() {
             .toLowerCase()
             .includes(query.trim().toLowerCase()),
         );
-      return (
-        matchesQuery && (active === 'all' || String(Boolean(customer.active)) === active)
-      );
+      return matchesQuery && (active === 'all' || String(Boolean(customer.active)) === active);
     });
   }, [appCustomers, query, active]);
 
@@ -185,12 +183,10 @@ export default function AudiencePage() {
           <h1 id="audience-title" tabIndex="-1">
             المستخدمون والزوار
           </h1>
-          <p>
-            إدارة مستخدمي لوحة التحكم وعملاء التطبيق ومتابعة تقارير النشاط والاهتمامات.
-          </p>
+          <p>إدارة مستخدمي لوحة التحكم وعملاء التطبيق ومتابعة تقارير النشاط والاهتمامات.</p>
         </div>
         <span className="aud-local-badge">
-          <span className="tiny-dot green" /> بيانات مباشرة من الخادم
+          <span className="tiny-dot green" /> بيانات مباشرة
         </span>
       </div>
 
@@ -286,49 +282,45 @@ export default function AudiencePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredDashboardUsers
-                        .slice((page - 1) * 10, page * 10)
-                        .map((user) => (
-                          <tr key={idOf(user)}>
-                            <td>
-                              <div className="aud-user-name">
-                                <span>{nameOf(user).slice(0, 2)}</span>
-                                <div>
-                                  <strong>{nameOf(user)}</strong>
-                                  <small>#{idOf(user)}</small>
-                                </div>
+                      {filteredDashboardUsers.slice((page - 1) * 10, page * 10).map((user) => (
+                        <tr key={idOf(user)}>
+                          <td>
+                            <div className="aud-user-name">
+                              <span>{nameOf(user).slice(0, 2)}</span>
+                              <div>
+                                <strong>{nameOf(user)}</strong>
+                                <small>#{idOf(user)}</small>
                               </div>
-                            </td>
-                            <td>
-                              <bdi>{user.phone || '—'}</bdi>
-                            </td>
-                            <td>{roleLabels[user.role] || user.role || '—'}</td>
-                            <td>
-                              <span
-                                className={`aud-status ${user.active ? 'active' : 'suspended'}`}
-                              >
-                                {user.active ? 'نشط' : 'غير نشط'}
-                              </span>
-                            </td>
-                            <td>
-                              {user.verified === true
-                                ? 'موثّق'
-                                : user.verified === false
-                                  ? 'غير موثّق'
-                                  : '—'}
-                            </td>
-                            <td>
-                              <button
-                                className="aud-user-open"
-                                type="button"
-                                onClick={() => setSelected(user)}
-                                aria-label={`تفاصيل ${nameOf(user)}`}
-                              >
-                                <Icon name="chevronLeft" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                            </div>
+                          </td>
+                          <td>
+                            <bdi>{user.phone || '—'}</bdi>
+                          </td>
+                          <td>{roleLabels[user.role] || user.role || '—'}</td>
+                          <td>
+                            <span className={`aud-status ${user.active ? 'active' : 'suspended'}`}>
+                              {user.active ? 'نشط' : 'غير نشط'}
+                            </span>
+                          </td>
+                          <td>
+                            {user.verified === true
+                              ? 'موثّق'
+                              : user.verified === false
+                                ? 'غير موثّق'
+                                : '—'}
+                          </td>
+                          <td>
+                            <button
+                              className="aud-user-open"
+                              type="button"
+                              onClick={() => setSelected(user)}
+                              aria-label={`تفاصيل ${nameOf(user)}`}
+                            >
+                              <Icon name="chevronLeft" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 ) : (
@@ -344,8 +336,7 @@ export default function AudiencePage() {
             {!loading && !error && filteredDashboardUsers.length > 0 && (
               <div className="aud-pagination">
                 <span>
-                  عرض {(page - 1) * 10 + 1}–
-                  {Math.min(page * 10, filteredDashboardUsers.length)} من{' '}
+                  عرض {(page - 1) * 10 + 1}–{Math.min(page * 10, filteredDashboardUsers.length)} من{' '}
                   {filteredDashboardUsers.length}
                 </span>
                 <div>
@@ -435,53 +426,49 @@ export default function AudiencePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredAppCustomers
-                        .slice((page - 1) * 10, page * 10)
-                        .map((customer) => (
-                          <tr key={idOf(customer)}>
-                            <td>
-                              <div className="aud-user-name">
-                                <span>{nameOf(customer).slice(0, 2)}</span>
-                                <div>
-                                  <strong>{nameOf(customer)}</strong>
-                                  <small>#{idOf(customer)}</small>
-                                </div>
+                      {filteredAppCustomers.slice((page - 1) * 10, page * 10).map((customer) => (
+                        <tr key={idOf(customer)}>
+                          <td>
+                            <div className="aud-user-name">
+                              <span>{nameOf(customer).slice(0, 2)}</span>
+                              <div>
+                                <strong>{nameOf(customer)}</strong>
+                                <small>#{idOf(customer)}</small>
                               </div>
-                            </td>
-                            <td>
-                              <bdi>{customer.phone || '—'}</bdi>
-                            </td>
-                            <td>
-                              <span
-                                className={`aud-status ${customer.active ? 'active' : 'suspended'}`}
-                              >
-                                {customer.active ? 'نشط' : 'غير نشط'}
-                              </span>
-                            </td>
-                            <td>
-                              {customer.verified === true
-                                ? 'موثّق'
-                                : customer.verified === false
-                                  ? 'غير موثّق'
-                                  : '—'}
-                            </td>
-                            <td>
-                              {customer.bookingCount == null
-                                ? '—'
-                                : count(customer.bookingCount)}
-                            </td>
-                            <td>
-                              <button
-                                className="aud-user-open"
-                                type="button"
-                                onClick={() => setSelected(customer)}
-                                aria-label={`تفاصيل ${nameOf(customer)}`}
-                              >
-                                <Icon name="chevronLeft" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                            </div>
+                          </td>
+                          <td>
+                            <bdi>{customer.phone || '—'}</bdi>
+                          </td>
+                          <td>
+                            <span
+                              className={`aud-status ${customer.active ? 'active' : 'suspended'}`}
+                            >
+                              {customer.active ? 'نشط' : 'غير نشط'}
+                            </span>
+                          </td>
+                          <td>
+                            {customer.verified === true
+                              ? 'موثّق'
+                              : customer.verified === false
+                                ? 'غير موثّق'
+                                : '—'}
+                          </td>
+                          <td>
+                            {customer.bookingCount == null ? '—' : count(customer.bookingCount)}
+                          </td>
+                          <td>
+                            <button
+                              className="aud-user-open"
+                              type="button"
+                              onClick={() => setSelected(customer)}
+                              aria-label={`تفاصيل ${nameOf(customer)}`}
+                            >
+                              <Icon name="chevronLeft" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 ) : (
@@ -497,8 +484,7 @@ export default function AudiencePage() {
             {!loading && !error && filteredAppCustomers.length > 0 && (
               <div className="aud-pagination">
                 <span>
-                  عرض {(page - 1) * 10 + 1}–
-                  {Math.min(page * 10, filteredAppCustomers.length)} من{' '}
+                  عرض {(page - 1) * 10 + 1}–{Math.min(page * 10, filteredAppCustomers.length)} من{' '}
                   {filteredAppCustomers.length}
                 </span>
                 <div>
@@ -557,8 +543,8 @@ export default function AudiencePage() {
               <Icon name="search" />
               <strong>تحليلات الطلب والاهتمامات قيد التجهيز</strong>
               <p>
-                سيتم ربط هذا القسم فور اكتمال خوارزميات تحليل طلبات واهتمامات مستخدمي
-                التطبيق في الـ Backend.
+                سيتم ربط هذا القسم فور اكتمال خوارزميات تحليل طلبات واهتمامات مستخدمي التطبيق في الـ
+                Backend.
               </p>
             </div>
           </section>

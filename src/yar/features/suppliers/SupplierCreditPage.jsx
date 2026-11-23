@@ -1,22 +1,28 @@
 import { uiLocale } from '../../i18n/prefs';
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Icon } from '../../components/ui/Icon';
-import { operationsStorage } from '../../services/storage/operationsStorage';
-import { catalogStorage } from '../../services/storage/catalogStorage';
-import { supplierCreditModel as C, operationsModel as M } from '../../services/models';
+import { operationsModel as M } from '../../services/models';
 import { TopUpModal } from './TopUpModal';
+import { AddSupplierModal } from './AddSupplierModal';
 import { can } from '../../auth/access';
 import { Drawer } from '../../components/ui/Drawer';
 import { useToast } from '../../components/ui/Toast';
+import { suppliersApi } from '../../services/api/suppliersApi';
 
-const labels = { deposit: 'شحن رصيد', issue: 'خصم إصدار', return: 'إرجاع إلى الرصيد' };
+const labels = {
+  deposit: 'شحن رصيد',
+  issue: 'خصم إصدار',
+  return: 'إرجاع إلى الرصيد',
+  credit: 'شحن رصيد',
+  debit: 'خصم إصدار',
+};
 
 export function SupplierCreditPage({ onNavigate, onOpenBooking, searchQuery = '', onSearchChange }) {
   const toast = useToast();
 
-  const [providers, setProviders] = useState(() => catalogStorage.getRecords('providers'));
-  const [ledger, setLedger] = useState(() => operationsStorage.getCreditLedger());
-  const [bookings, setBookings] = useState(() => operationsStorage.getBookings());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [liveSuppliers, setLiveSuppliers] = useState([]);
 
   const [providerFilter, setProviderFilter] = useState('all');
   const [currencyFilter, setCurrencyFilter] = useState('all');
@@ -24,131 +30,162 @@ export function SupplierCreditPage({ onNavigate, onOpenBooking, searchQuery = ''
   // Modals & Drawers
   const [showTopUp, setShowTopUp] = useState(false);
   const [topUpTarget, setTopUpTarget] = useState({ providerId: '', currency: 'USD' });
+  const [showAddSupplier, setShowAddSupplier] = useState(false);
 
-  const [accountDrawer, setAccountDrawer] = useState({ open: false, providerId: '', currency: 'USD' });
+  const [accountDrawer, setAccountDrawer] = useState({
+    open: false,
+    providerId: '',
+    currency: 'USD',
+    name: '',
+    balance: 0,
+  });
+  const [drawerLoading, setDrawerLoading] = useState(false);
+  const [drawerError, setDrawerError] = useState(null);
+  const [drawerItems, setDrawerItems] = useState([]);
+  const [drawerBalance, setDrawerBalance] = useState(0);
 
-  useEffect(() => {
-    const unsubOps = operationsStorage.subscribe(() => {
-      setLedger(operationsStorage.getCreditLedger());
-      setBookings(operationsStorage.getBookings());
-    });
-    const unsubCat = catalogStorage.subscribe(() => {
-      setProviders(catalogStorage.getRecords('providers'));
-    });
-    return () => {
-      unsubOps();
-      unsubCat();
-    };
+  // Load suppliers from API 065
+  const loadSuppliers = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await suppliersApi.getSuppliers();
+      setLiveSuppliers(res.items || []);
+    } catch (err) {
+      console.error('Failed to load suppliers:', err);
+      setError(err.message || 'تعذر تحميل أرصدة الموردين من الخادم.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const money = (v, c) => {
+  useEffect(() => {
+    loadSuppliers();
+  }, [loadSuppliers]);
+
+  // Load drawer ledger from API 066 when drawer opens
+  const loadDrawerLedger = useCallback(async (pId) => {
+    if (!pId) return;
+    setDrawerLoading(true);
+    setDrawerError(null);
+    try {
+      const res = await suppliersApi.getSupplierLedger(pId);
+      setDrawerItems(res.items || []);
+      if (res.balance_usd != null) {
+        setDrawerBalance(Number(res.balance_usd));
+      }
+    } catch (err) {
+      console.error('Failed to load supplier ledger:', err);
+      setDrawerError(err.message || 'تعذر تحميل كشف حساب المورّد من الخادم.');
+    } finally {
+      setDrawerLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (accountDrawer.open && accountDrawer.providerId) {
+      loadDrawerLedger(accountDrawer.providerId);
+    }
+  }, [accountDrawer.open, accountDrawer.providerId, loadDrawerLedger]);
+
+  const money = (v, c = 'USD') => {
     const f = new Intl.NumberFormat('en-US', {
       minimumFractionDigits: c === 'USD' ? 2 : 0,
-      maximumFractionDigits: c === 'USD' ? 2 : 0
+      maximumFractionDigits: c === 'USD' ? 2 : 0,
     });
     return `${f.format(Number(v) || 0)} ${c === 'USD' ? '$' : 'د.ع'}`;
   };
 
-  // Accounts list
+  // ONLY real suppliers from API (no mock catalog providers)
+  const availableProviders = useMemo(() => {
+    return liveSuppliers.map(s => ({
+      id: String(s.id),
+      name: s.name || `مورّد #${s.id}`,
+    }));
+  }, [liveSuppliers]);
+
+  // Accounts list from live data only
   const accounts = useMemo(() => {
-    if (!C) return [];
-    const all = C.accounts(ledger, providers);
     const q = searchQuery.trim().toLowerCase();
-    return all.filter(a => {
+
+    const list = liveSuppliers.map(s => {
+      const id = String(s.id);
+      const name = s.name || `مورّد #${id}`;
+      const cur = s.currency || 'USD';
+      const bal = Number(s.balance_usd ?? s.balance ?? 0);
+      return {
+        providerId: id,
+        name,
+        currency: cur,
+        balance: bal,
+        deposits: Number(s.deposits ?? 0),
+        issued: Number(s.issued ?? 0),
+        returned: Number(s.returned ?? 0),
+        low: bal < (cur === 'USD' ? 100 : 100000),
+      };
+    });
+
+    return list.filter(a => {
       if (providerFilter !== 'all' && a.providerId !== providerFilter) return false;
       if (currencyFilter !== 'all' && a.currency !== currencyFilter) return false;
       if (q && !a.name.toLowerCase().includes(q) && !a.providerId.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [ledger, providers, providerFilter, currencyFilter, searchQuery]);
+  }, [liveSuppliers, providerFilter, currencyFilter, searchQuery]);
 
-  // Full Statement entries
-  const statementRows = useMemo(() => {
-    if (!C) return [];
-    const q = searchQuery.trim().toLowerCase();
-    const all = C.statement(ledger, bookings);
-    return all.filter(e => {
-      if (providerFilter !== 'all' && e.providerId !== providerFilter) return false;
-      if (currencyFilter !== 'all' && e.currency !== currencyFilter) return false;
-      if (q) {
-        const text = [e.providerName, e.pnr, e.route, e.reference, e.bookingId, e.note].join(' ').toLowerCase();
-        if (!text.includes(q)) return false;
-      }
-      return true;
+  const handleOpenAccount = (pId, cur = 'USD', name = '', balance = 0) => {
+    setAccountDrawer({
+      open: true,
+      providerId: String(pId),
+      currency: cur,
+      name,
+      balance,
     });
-  }, [ledger, bookings, providerFilter, currencyFilter, searchQuery]);
-
-  const handleOpenAccount = (pId, cur) => {
-    setAccountDrawer({ open: true, providerId: pId, currency: cur });
+    setDrawerBalance(balance);
+    setDrawerItems([]);
   };
 
   const handleOpenTopUp = (pId = '', cur = 'USD') => {
-    setTopUpTarget({ providerId: pId, currency: cur });
+    setTopUpTarget({ providerId: String(pId), currency: cur });
     setShowTopUp(true);
   };
 
-  const handleAddDemoStatement = pId => {
-    try {
-      operationsStorage.addSupplierStatementDemo(pId);
-      toast('أُضيفت تذاكر وتعزيز وإرجاع تجريبية دون تغيير الحركات السابقة.');
-    } catch (e) {
-      toast(e.message);
+  const handleTopUpSuccess = (pId) => {
+    loadSuppliers();
+    if (accountDrawer.open && accountDrawer.providerId === pId) {
+      loadDrawerLedger(pId);
     }
   };
 
   const handleExportCSV = () => {
     try {
       const rows = [
-        ['الحركة', 'التاريخ', 'المورّد', 'العملة', 'مدين - خصم', 'دائن - تعزيز', 'الرصيد المتبقي', 'PNR', 'الروت', 'تاريخ السفر', 'الناقل', 'المرجع', 'الطلب', 'الملاحظة'],
-        ...statementRows.map(e => [
-          labels[e.type] || e.type,
-          e.at,
-          e.providerName,
-          e.currency,
-          e.debit || '',
-          e.credit || '',
-          e.after,
-          e.pnr || '',
-          e.route || '',
-          e.travelDate || '',
-          e.carrier || '',
-          e.reference || '',
-          e.bookingId || '',
-          e.note || ''
-        ])
+        ['المورّد', 'العملة', 'الرصيد المتاح', 'شحن الرصيد', 'خصومات الإصدار', 'الإرجاع', 'الحالة'],
+        ...accounts.map(a => [
+          a.name,
+          a.currency,
+          a.balance,
+          a.deposits,
+          a.issued,
+          a.returned,
+          a.low ? 'منخفض' : 'طبيعي',
+        ]),
       ];
-      const csv = operationsStorage.csv(rows);
+      const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `YAR-supplier-credit-${M.today()}.csv`;
+      a.download = `YAR-suppliers-credit-${M.today()}.csv`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast('صُدّر كشف حركات أرصدة المورّدين.');
+      toast('صُدّر كشف أرصدة المورّدين بنجاح.');
     } catch (e) {
       toast(e.message);
     }
   };
 
-  // Account drawer statement
-  const drawerAccount = useMemo(() => {
-    if (!accountDrawer.open || !C) return null;
-    const p = providers.find(p => p.id === accountDrawer.providerId);
-    const balanceVal = C.balance(ledger, accountDrawer.providerId, accountDrawer.currency);
-    const rows = C.statement(ledger, bookings).filter(e =>
-      e.providerId === accountDrawer.providerId && e.currency === accountDrawer.currency
-    );
-    return {
-      name: p?.name || 'المورّد',
-      provider: p,
-      balance: balanceVal,
-      rows
-    };
-  }, [accountDrawer, ledger, bookings, providers]);
-
   const canTopUp = can('supplier.topup');
-  const canDemo = can('supplier.demo');
 
   return (
     <div className="ops-page credit-page">
@@ -158,24 +195,61 @@ export function SupplierCreditPage({ onNavigate, onOpenBooking, searchQuery = ''
           <h1 id="credit-title" tabIndex={-1}>أرصدة المورّدين</h1>
           <p>اشحن رصيد المورّد مسبقًا، وتابع خصم تكلفة الخدمة عند كل إصدار.</p>
         </div>
-        {canTopUp ? (
-        <button
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button
             type="button"
-            className="button primary"
-            data-credit-add
-            onClick={() => handleOpenTopUp()}
+            className="button secondary"
+            onClick={loadSuppliers}
+            title="تحديث البيانات من الخادم"
+            disabled={loading}
           >
-            <i data-icon="plus"><Icon name="plus" /></i>
-            شحن رصيد
+            <i data-icon="refresh"><Icon name="refresh" /></i>
+            تحديث
           </button>
-        ) : (
-          <span className="perm-chip" role="note">عرض فقط · شحن الرصيد وتعديله متاحان لمدير النظام.</span>
-        )}
+          {canTopUp && (
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() => setShowAddSupplier(true)}
+            >
+              <i data-icon="plus"><Icon name="plus" /></i>
+              إضافة مورّد
+            </button>
+          )}
+          {canTopUp ? (
+            <button
+              type="button"
+              className="button primary"
+              data-credit-add
+              onClick={() => handleOpenTopUp()}
+            >
+              <i data-icon="plus"><Icon name="plus" /></i>
+              شحن رصيد
+            </button>
+          ) : (
+            <span className="perm-chip" role="note">عرض فقط · شحن الرصيد وتعديله متاحان لمدير النظام.</span>
+          )}
+        </div>
       </div>
 
-      <p className="ops-notice">
-        هذه السجلات والحركات محلية تجريبية للمعاينة، ولا تمثل معاملات مالية فعلية. أرصدة المورّدين منفصلة عن تحصيل العملاء، ولا تُجمع العملات.
-      </p>
+      {/* Live Badge */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <span className="ops-badge live" style={{ background: 'var(--c-eaf4e6, #eaf4e6)', color: 'var(--c-2b5a26, #2b5a26)', padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
+          • بيانات مباشرة من الخادم (API 065 / 066 / 064 / 068)
+        </span>
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+          أرصدة المورّدين بالدولار منفصلة عن تحصيل العملاء، وتُعرض الحسابات الحقيقية فقط من الخادم.
+        </span>
+      </div>
+
+      {error && (
+        <div className="ops-form-error wide" role="alert" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{error}</span>
+          <button type="button" className="button secondary" style={{ minHeight: 28, fontSize: 12, padding: '2px 8px' }} onClick={loadSuppliers}>
+            إعادة المحاولة
+          </button>
+        </div>
+      )}
 
       {/* Currency Balances Grid */}
       <div className="ops-currency-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 20, marginBottom: 20 }}>
@@ -224,7 +298,7 @@ export function SupplierCreditPage({ onNavigate, onOpenBooking, searchQuery = ''
               onChange={e => setProviderFilter(e.target.value)}
             >
               <option value="all">كل المورّدين</option>
-              {providers.map(p => (
+              {availableProviders.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
@@ -244,68 +318,76 @@ export function SupplierCreditPage({ onNavigate, onOpenBooking, searchQuery = ''
         </div>
 
         <div className="ops-table-wrap table-scroll">
-          <table className="ops-table credit-accounts">
-            <thead>
-              <tr>
-                <th>المورّد</th>
-                <th>الرصيد المتاح</th>
-                <th>شحن الرصيد</th>
-                <th>خصومات الإصدار</th>
-                <th>الإرجاع</th>
-                <th>الإجراء</th>
-              </tr>
-            </thead>
-            <tbody>
-              {accounts.length > 0 ? (
-                accounts.map(a => (
-                  <tr key={a.providerId + a.currency}>
-                    <td>
-                      <strong>{a.name}</strong>
-                      <small style={{ color: 'var(--muted)', display: 'block' }}>{a.currency}</small>
-                    </td>
-                    <td>
-                      <strong><bdi>{money(a.balance, a.currency)}</bdi></strong>
-                      {a.low && <span className="ops-status review" style={{ marginInlineStart: 8 }}>رصيد منخفض</span>}
-                    </td>
-                    <td><bdi>{money(a.deposits, a.currency)}</bdi></td>
-                    <td><bdi>{money(a.issued, a.currency)}</bdi></td>
-                    <td><bdi>{money(a.returned, a.currency)}</bdi></td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button
-                          type="button"
-                          className="button secondary"
-                          style={{ minHeight: 32, padding: '4px 10px', fontSize: 12 }}
-                          onClick={() => handleOpenAccount(a.providerId, a.currency)}
-                        >
-                          كشف الحساب
-                        </button>
-                        {canTopUp && (
-                        <button
-                          type="button"
-                          className="button primary"
-                          style={{ minHeight: 32, padding: '4px 10px', fontSize: 12 }}
-                          onClick={() => handleOpenTopUp(a.providerId, a.currency)}
-                        >
-                          شحن
-                        </button>
-                        )}
-                      </div>
+          {loading ? (
+            <div className="aud-loading" style={{ padding: 40, textAlign: 'center' }}>
+              <div className="aud-spinner" style={{ margin: '0 auto 12px' }} />
+              <p style={{ color: 'var(--muted)' }}>جاري تحميل أرصدة الموردين من الخادم...</p>
+            </div>
+          ) : (
+            <table className="ops-table credit-accounts">
+              <thead>
+                <tr>
+                  <th>المورّد</th>
+                  <th>الرصيد المتاح</th>
+                  <th>شحن الرصيد</th>
+                  <th>خصومات الإصدار</th>
+                  <th>الإرجاع</th>
+                  <th>الإجراء</th>
+                </tr>
+              </thead>
+              <tbody>
+                {accounts.length > 0 ? (
+                  accounts.map(a => (
+                    <tr key={a.providerId + a.currency}>
+                      <td>
+                        <strong>{a.name}</strong>
+                        <small style={{ color: 'var(--muted)', display: 'block' }}>{a.currency}</small>
+                      </td>
+                      <td>
+                        <strong><bdi>{money(a.balance, a.currency)}</bdi></strong>
+                        {a.low && <span className="ops-status review" style={{ marginInlineStart: 8 }}>رصيد منخفض</span>}
+                      </td>
+                      <td><bdi>{money(a.deposits, a.currency)}</bdi></td>
+                      <td><bdi>{money(a.issued, a.currency)}</bdi></td>
+                      <td><bdi>{money(a.returned, a.currency)}</bdi></td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button
+                            type="button"
+                            className="button secondary"
+                            style={{ minHeight: 32, padding: '4px 10px', fontSize: 12 }}
+                            onClick={() => handleOpenAccount(a.providerId, a.currency, a.name, a.balance)}
+                          >
+                            كشف الحساب
+                          </button>
+                          {canTopUp && (
+                            <button
+                              type="button"
+                              className="button primary"
+                              style={{ minHeight: 32, padding: '4px 10px', fontSize: 12 }}
+                              onClick={() => handleOpenTopUp(a.providerId, a.currency)}
+                            >
+                              شحن
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: 35, color: 'var(--muted)' }}>
+                      <p style={{ fontWeight: 600, marginBottom: 4 }}>لا توجد حسابات موردين مسجلة حتى الآن.</p>
+                      <small>No supplier accounts found on the server.</small>
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: 25, color: 'var(--muted)' }}>
-                    لا توجد حسابات مطابقة.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
         <p className="ops-note" style={{ padding: '12px 20px', margin: 0, borderTop: '1px solid var(--border)' }}>
-          تنبيه الرصيد: الرصيد المنخفض أقل من 100$ أو 100,000 د.ع. السجلات السابقة لا تُخصم بأثر رجعي؛ أي خصم جديد يرتبط بطلب واحد ومرجع إصدار.
+          تنبيه الرصيد: الرصيد المنخفض أقل من 100$ أو 100,000 د.ع. يُخصم رصيد المورّد تلقائيًا عند تأكيد الحجز وإصدار التذكرة.
         </p>
       </section>
 
@@ -313,9 +395,9 @@ export function SupplierCreditPage({ onNavigate, onOpenBooking, searchQuery = ''
       <section className="panel ops-card">
         <div className="ops-toolbar" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h3 style={{ fontSize: 15, margin: 0 }}>سجل الحركات</h3>
+            <h3 style={{ fontSize: 15, margin: 0 }}>كشف حركة أرصدة الموردين</h3>
             <p className="ops-note" style={{ margin: '4px 0 0 0' }}>
-              الرصيد بعد كل حركة محسوب على كامل حساب المورّد بعملته، حتى عند التصفية.
+              اضغط على «كشف الحساب» أمام أي مورّد في الجدول أعلاه لعرض وتدقيق كشف حركاته المباشرة (API 066).
             </p>
           </div>
           <button
@@ -327,88 +409,26 @@ export function SupplierCreditPage({ onNavigate, onOpenBooking, searchQuery = ''
             تصدير الكشف CSV
           </button>
         </div>
-
-        <div className="credit-statement">
-          <div className="table-scroll">
-            <table className="ops-table credit-ledger">
-              <thead>
-                <tr>
-                  <th>الحركة / التاريخ</th>
-                  <th>المورّد / تفاصيل التذكرة</th>
-                  <th>مدين · خصم</th>
-                  <th>دائن · تعزيز</th>
-                  <th>الرصيد المتبقي</th>
-                  <th>المرجع / الطلب</th>
-                </tr>
-              </thead>
-              <tbody>
-                {statementRows.length > 0 ? (
-                  statementRows.map(e => (
-                    <tr key={e.id}>
-                      <td>
-                        <span className={`ops-status ${e.type === 'issue' ? 'processing' : e.type === 'return' ? 'partialRefund' : 'paid'}`}>
-                          {labels[e.type] || e.type}
-                        </span>
-                        <small style={{ color: 'var(--muted)', display: 'block', marginTop: 4 }}>
-                          {new Date(e.at).toLocaleString(uiLocale(), { timeZone: 'Asia/Baghdad' })}
-                        </small>
-                      </td>
-                      <td>
-                        <strong>{e.providerName}</strong>
-                        {e.bookingId && (
-                          <div className="credit-ticket" style={{ fontSize: 11, color: 'var(--c-4d6945)', marginTop: 3 }}>
-                            <span>PNR: <bdi>{e.pnr || 'غير مسجّل'}</bdi></span>
-                            <span style={{ margin: '0 6px' }}>·</span>
-                            <span>الروت: {e.route || 'غير مسجّل'}</span>
-                            {e.travelDate && <span> · تاريخ السفر: {e.travelDate}</span>}
-                            {e.carrier && <span> · الناقل: {e.carrier}</span>}
-                          </div>
-                        )}
-                        <small style={{ color: 'var(--muted)', display: 'block' }}>{e.staffName || 'فريق العمل'}</small>
-                      </td>
-                      <td className="credit-debit">
-                        <bdi style={{ color: e.debit ? 'var(--c-924b42)' : 'inherit' }}>
-                          {e.debit ? money(e.debit, e.currency) : '—'}
-                        </bdi>
-                      </td>
-                      <td className="credit-credit">
-                        <bdi style={{ color: e.credit ? 'var(--c-2b5a26)' : 'inherit' }}>
-                          {e.credit ? money(e.credit, e.currency) : '—'}
-                        </bdi>
-                      </td>
-                      <td>
-                        <strong><bdi>{money(e.after, e.currency)}</bdi></strong>
-                      </td>
-                      <td>
-                        <bdi>{e.reference}</bdi>
-                        {e.bookingId && (
-                          <button
-                            type="button"
-                            className="text-action"
-                            style={{ display: 'block', fontSize: 11, padding: 0, marginTop: 3 }}
-                            onClick={() => onOpenBooking(e.bookingId)}
-                          >
-                            {e.bookingId}
-                          </button>
-                        )}
-                        <small style={{ color: 'var(--muted)', display: 'block' }}>{e.note}</small>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: 25, color: 'var(--muted)' }}>
-                      لا توجد حركات مطابقة.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
       </section>
 
-      {/* Top up modal */}
+      {/* Add Supplier Modal (API 068) */}
+      {showAddSupplier && (
+        <Drawer
+          open={showAddSupplier}
+          onClose={() => setShowAddSupplier(false)}
+          eyebrow="إدارة المورّدين (API 068)"
+          title="إضافة مورّد جديد"
+        >
+          <AddSupplierModal
+            onClose={() => setShowAddSupplier(false)}
+            onCreated={() => {
+              loadSuppliers();
+            }}
+          />
+        </Drawer>
+      )}
+
+      {/* Top up modal (API 064) */}
       {showTopUp && (
         <Drawer
           open={showTopUp}
@@ -419,24 +439,28 @@ export function SupplierCreditPage({ onNavigate, onOpenBooking, searchQuery = ''
           <TopUpModal
             initialProviderId={topUpTarget.providerId}
             initialCurrency={topUpTarget.currency}
+            providers={availableProviders}
             onClose={() => setShowTopUp(false)}
-            onDone={(pId, cur) => handleOpenAccount(pId, cur)}
+            onDone={(pId, cur) => {
+              handleTopUpSuccess(pId);
+              handleOpenAccount(pId, cur);
+            }}
           />
         </Drawer>
       )}
 
-      {/* Account Statement Drawer */}
-      {accountDrawer.open && drawerAccount && (
+      {/* Account Statement Drawer (API 066) */}
+      {accountDrawer.open && (
         <Drawer
           open={accountDrawer.open}
-          onClose={() => setAccountDrawer({ open: false, providerId: '', currency: 'USD' })}
-          eyebrow="رصيد مسبق الدفع"
-          title={`${drawerAccount.name} · ${accountDrawer.currency}`}
+          onClose={() => setAccountDrawer({ open: false, providerId: '', currency: 'USD', name: '', balance: 0 })}
+          eyebrow="حساب المورّد · رصيد مسبق الدفع (API 066)"
+          title={`${accountDrawer.name || 'المورّد'} · ${accountDrawer.currency}`}
         >
           <div className="credit-balance" style={{ marginBottom: 16 }}>
             <span style={{ fontSize: 12, color: 'var(--muted)', display: 'block' }}>الرصيد المتاح لدى المورّد</span>
             <strong style={{ fontSize: 26, color: 'var(--green)' }}>
-              <bdi>{money(drawerAccount.balance, accountDrawer.currency)}</bdi>
+              <bdi>{money(drawerBalance || accountDrawer.balance, accountDrawer.currency)}</bdi>
             </strong>
             <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
               تُخصم تكلفة الخدمة عند الإصدار / التأكيد فقط.
@@ -445,65 +469,122 @@ export function SupplierCreditPage({ onNavigate, onOpenBooking, searchQuery = ''
 
           <div className="ops-form-actions" style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
             {canTopUp && (
+              <button
+                type="button"
+                className="button primary"
+                onClick={() => handleOpenTopUp(accountDrawer.providerId, accountDrawer.currency)}
+              >
+                شحن الرصيد
+              </button>
+            )}
             <button
               type="button"
-              className="button primary"
-              onClick={() => handleOpenTopUp(accountDrawer.providerId, accountDrawer.currency)}
+              className="button secondary"
+              onClick={() => loadDrawerLedger(accountDrawer.providerId)}
+              disabled={drawerLoading}
             >
-              شحن الرصيد
+              تحديث الكشف
             </button>
-            )}
-
           </div>
 
           <section className="ops-section">
             <h3>كشف حركات الحساب</h3>
-            <div className="table-scroll">
-              <table className="ops-table credit-ledger">
-                <thead>
-                  <tr>
-                    <th>الحركة / التاريخ</th>
-                    <th>مدين</th>
-                    <th>دائن</th>
-                    <th>الرصيد</th>
-                    <th>المرجع</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {drawerAccount.rows.map(e => (
-                    <tr key={e.id}>
-                      <td>
-                        <span className={`ops-status ${e.type === 'issue' ? 'processing' : e.type === 'return' ? 'partialRefund' : 'paid'}`}>
-                          {labels[e.type] || e.type}
-                        </span>
-                        <small style={{ color: 'var(--muted)', display: 'block' }}>
-                          {new Date(e.at).toLocaleString(uiLocale(), { timeZone: 'Asia/Baghdad' })}
-                        </small>
-                      </td>
-                      <td>{e.debit ? money(e.debit, e.currency) : '—'}</td>
-                      <td>{e.credit ? money(e.credit, e.currency) : '—'}</td>
-                      <td><strong>{money(e.after, e.currency)}</strong></td>
-                      <td>
-                        <bdi>{e.reference}</bdi>
-                        {e.bookingId && (
-                          <button
-                            type="button"
-                            className="text-action"
-                            style={{ fontSize: 11, padding: 0 }}
-                            onClick={() => {
-                              setAccountDrawer({ open: false, providerId: '', currency: 'USD' });
-                              onOpenBooking(e.bookingId);
-                            }}
-                          >
-                            {e.bookingId}
-                          </button>
-                        )}
-                      </td>
+
+            {drawerLoading ? (
+              <div className="aud-loading" style={{ padding: 30, textAlign: 'center' }}>
+                <div className="aud-spinner" style={{ margin: '0 auto 10px' }} />
+                <p style={{ color: 'var(--muted)' }}>جاري تحميل كشف الحساب من الخادم...</p>
+              </div>
+            ) : drawerError ? (
+              <div className="ops-form-error wide" role="alert" style={{ marginBottom: 16 }}>
+                <p>{drawerError}</p>
+                <button
+                  type="button"
+                  className="button secondary"
+                  style={{ minHeight: 28, fontSize: 12, marginTop: 8 }}
+                  onClick={() => loadDrawerLedger(accountDrawer.providerId)}
+                >
+                  إعادة المحاولة
+                </button>
+              </div>
+            ) : (
+              <div className="table-scroll">
+                <table className="ops-table credit-ledger">
+                  <thead>
+                    <tr>
+                      <th>الحركة / التاريخ</th>
+                      <th>مدين · خصم</th>
+                      <th>دائن · شحن</th>
+                      <th>الرصيد</th>
+                      <th>المرجع / الطلب</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {drawerItems.length > 0 ? (
+                      drawerItems.map((e, idx) => {
+                        const isIssue = e.type === 'issue' || e.type === 'debit';
+                        const isReturn = e.type === 'return';
+                        const isDeposit = e.type === 'deposit' || e.type === 'credit' || !e.type;
+                        const dateStr = e.created_at || e.created_at_utc || e.at;
+                        return (
+                          <tr key={e.id || idx}>
+                            <td>
+                              <span className={`ops-status ${isIssue ? 'processing' : isReturn ? 'partialRefund' : 'paid'}`}>
+                                {labels[e.type] || e.type || 'حركة رصيد'}
+                              </span>
+                              {dateStr && (
+                                <small style={{ color: 'var(--muted)', display: 'block', marginTop: 4 }}>
+                                  {new Date(dateStr).toLocaleString(uiLocale(), { timeZone: 'Asia/Baghdad' })}
+                                </small>
+                              )}
+                            </td>
+                            <td>
+                              <bdi style={{ color: isIssue ? 'var(--c-924b42)' : 'inherit' }}>
+                                {isIssue ? money(e.amount_usd ?? e.amount, accountDrawer.currency) : '—'}
+                              </bdi>
+                            </td>
+                            <td>
+                              <bdi style={{ color: (isDeposit || isReturn) ? 'var(--c-2b5a26)' : 'inherit' }}>
+                                {(isDeposit || isReturn) ? money(e.amount_usd ?? e.amount, accountDrawer.currency) : '—'}
+                              </bdi>
+                            </td>
+                            <td>
+                              <strong>{money(e.balance_after_usd ?? e.after ?? 0, accountDrawer.currency)}</strong>
+                            </td>
+                            <td>
+                              <bdi>{e.reference || '—'}</bdi>
+                              {e.booking_id && (
+                                <button
+                                  type="button"
+                                  className="text-action"
+                                  style={{ fontSize: 11, padding: 0, display: 'block', marginTop: 3 }}
+                                  onClick={() => {
+                                    setAccountDrawer({ open: false, providerId: '', currency: 'USD', name: '', balance: 0 });
+                                    onOpenBooking?.(e.booking_id);
+                                  }}
+                                >
+                                  طلب #{e.booking_id}
+                                </button>
+                              )}
+                              {e.note && (
+                                <small style={{ color: 'var(--muted)', display: 'block' }}>{e.note}</small>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={5} style={{ textAlign: 'center', padding: 25, color: 'var(--muted)' }}>
+                          <p style={{ fontWeight: 600, marginBottom: 4 }}>لا توجد حركات مسجلة لهذا المورّد حتى الآن.</p>
+                          <small>No transactions recorded for this supplier yet.</small>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         </Drawer>
       )}
@@ -512,4 +593,3 @@ export function SupplierCreditPage({ onNavigate, onOpenBooking, searchQuery = ''
 }
 
 export default SupplierCreditPage;
-

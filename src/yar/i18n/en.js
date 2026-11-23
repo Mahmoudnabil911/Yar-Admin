@@ -2050,4 +2050,71 @@ export const EN = {
   'إجمالي السعر IQD': 'Total price IQD',
   'تعذر تحميل بعض بيانات العملاء أو الخدمات. أعد المحاولة قبل إنشاء الحجز.':
     'Some customer or service data could not be loaded from the server. Retry before creating a booking.',
+
+  // Supplier Credit & Ledger (APIs 065, 066, 064, 063)
+  'تحديث البيانات من الخادم': 'Refresh data from server',
+  'تحديث الكشف': 'Refresh statement',
+  '• بيانات مباشرة من الخادم (API 065 / 066 / 064)': '• Live data from server (API 065 / 066 / 064)',
+  'أرصدة المورّدين بالدولار منفصلة عن تحصيل العملاء، ولا تُجمع العملات.':
+    'Supplier USD balances are separate from customer collections, and currencies are never combined.',
+  'جاري تحميل أرصدة الموردين من الخادم...': 'Loading supplier balances from server...',
+  'جاري تحميل كشف الحساب من الخادم...': 'Loading account statement from server...',
+  'تعذر تحميل أرصدة الموردين من الخادم.': 'Failed to load supplier balances from server.',
+  'تعذر تحميل كشف حساب المورّد من الخادم.': 'Failed to load supplier account statement from server.',
+  'لا توجد حسابات موردين مسجلة حتى الآن.': 'No supplier accounts found yet.',
+  'لا توجد حركات مسجلة لهذا المورّد حتى الآن.': 'No transactions recorded for this supplier yet.',
+  'كشف حركة أرصدة الموردين': 'Supplier Credit Movement Statement',
+  'اضغط على «كشف الحساب» أمام أي مورّد في الجدول أعلاه لعرض وتدقيق كشف حركاته المباشرة (API 066).':
+    'Click "Statement" next to any supplier in the table above to view and audit its live transactions (API 066).',
+  'حساب المورّد · رصيد مسبق الدفع (API 066)': 'Supplier Account · Prepaid Balance (API 066)',
+  'مدين · خصم': 'Debit · Deduction',
+  'دائن · شحن': 'Credit · Top-up',
+  'المرجع / الطلب': 'Reference / Order',
+  'صُدّر كشف أرصدة المورّدين بنجاح.': 'Supplier balances statement exported successfully.',
+  'إضافة رصيد بالدولار لحساب المورّد في سجلات النظام (API 064).':
+    'Credit USD balance to supplier account in system records (API 064).',
+  'المبلغ بالدولار': 'Amount in USD',
+  'يبقى كل رصيد بعملته (USD). شحن الرصيد يرفع الرصيد المتاح لإصدار التذاكر وتأكيد الخدمات.':
+    'Each balance remains in its currency (USD). Top-up increases available balance for issuing tickets and confirming services.',
+  'جاري شحن الرصيد...': 'Processing top-up...',
+  'تم شحن رصيد المورّد بنجاح.': 'Supplier credit topped up successfully.',
+  'تعذر شحن رصيد المورد.': 'Failed to top up supplier credit.',
+
+  // Supplier Management & Creation (APIs 067, 068, 062)
+  'إنشاء حساب مورّد جديد على الخادم (API 068).': 'Create a new supplier account on server (API 068).',
+  'اسم المورّد *': 'Supplier Name *',
+  'كود المورّد (Code)': 'Supplier Code',
+  'طيران (Flight)': 'Flight',
+  'فنادق (Hotel)': 'Hotel',
+  'نقل وسيارات (Transfer)': 'Transfer',
+  'جولات سياحية (Tour)': 'Tour',
+  'باقات سفر (Package)': 'Package',
+  'طريقة الربط': 'Integration method',
+  'يدوي (Manual)': 'Manual',
+  'واجهة برمجية (API)': 'API',
+  'القناة (Channel)': 'Channel',
+  'بيئة تجريبية (Test)': 'Test environment',
+  'بيئة الإنتاج (Production)': 'Production environment',
+  'المدن المغطاة': 'Coverage cities',
+  'ملاحظات إضافية': 'Additional notes',
+  'جاري الحفظ على الخادم...': 'Saving to server...',
+  'حفظ المورّد الجديد': 'Save new supplier',
+  'تم إنشاء المورّد بنجاح على الخادم.': 'Supplier created successfully on server.',
+  'تعذر إنشاء المورّد على الخادم.': 'Failed to create supplier on server.',
+  'إدارة المورّدين (API 068)': 'Supplier Management (API 068)',
+  'إضافة مورّد جديد': 'Add new supplier',
+  'إضافة مورّد': 'Add supplier',
+  'عرض وإدارة مزوّدي الطيران والفنادق والنقل والباقات والجولات في النظام (API 067 / 068).':
+    'View and manage flight, hotel, transport, package, and tour providers in the system (API 067 / 068).',
+  'تحديث القائمة من الخادم': 'Refresh list from server',
+  '• بيانات مباشرة من الخادم (API 067 / 068)': '• Live data from server (API 067 / 068)',
+  'تُحفظ وتُدار بيانات المورّدين مباشرة على قاعدة بيانات الخادم.':
+    'Supplier data is stored and managed directly on the server database.',
+  'جاري تحميل قائمة المزوّدين من الخادم...': 'Loading suppliers list from server...',
+  'لا يوجد مزوّدو خدمة مسجلون مطابقون للبحث.': 'No service providers found matching search.',
+  'إضافة مزوّد خدمة جديد': 'Add new service provider',
+  'الأرصدة': 'Balances',
+  'الانتقال إلى أرصدة وحركات المورّد': 'Navigate to supplier balances and ledger',
+  'لا يوجد موردون مسجلون على الخادم حالياً. يرجى إضافة مورّد أولاً باستخدام زر «إضافة مورّد».':
+    'No suppliers currently registered on the server. Please add a supplier first using "Add supplier".',
 };
