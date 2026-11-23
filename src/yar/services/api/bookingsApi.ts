@@ -58,6 +58,7 @@ export interface BookingRecord {
 }
 
 export interface BookingItem extends Partial<BookingRecord> {
+  id: number | string;
   customer?: BookingCustomer | string;
   service?: 'flight' | 'hotel' | 'package' | 'car' | 'transfer' | 'tour';
   route?: string;
@@ -73,10 +74,6 @@ export interface BookingItem extends Partial<BookingRecord> {
 
 export interface ListBookingsParams {
   limit?: number;
-  offset?: number;
-  status?: string;
-  service?: string;
-  customer?: string;
 }
 
 interface CachedBookings {
@@ -154,23 +151,23 @@ export const bookingsApi = {
       ...record,
       id: record.reference || `YAR-BK-${record.id}`,
       rawId: record.id,
-      customer: record.customer_name || `عميل #${record.customer_id || record.id}`,
-      phone: record.customer_phone || '07XX XXX XX99',
+      customer: record.customer_name || '',
+      phone: record.customer_phone || '',
       service: record.service_type || 'hotel',
-      route: record.service_type === 'hotel' ? 'حجز فندقي' : record.service_type,
-      detail: record.quantity ? `${record.quantity} وحدة` : '',
-      date: record.created_at ? record.created_at.slice(0, 10) : record.fx_date || new Date().toISOString().slice(0, 10),
-      source: 'app',
+      route: '',
+      detail: '',
+      date: record.created_at ? record.created_at.slice(0, 10) : '',
       amount: record.total_iqd || 0,
       currency: 'IQD',
       status,
       payment: isPaid ? 'paid' : 'pending',
-      assigned: record.assigned_to ? `موظف #${record.assigned_to}` : 'غير مسند',
-      provider: record.provider_reference || 'مزوّد YAR',
+      assigned: record.assigned_to ? `#${record.assigned_to}` : '',
+      assignedId: record.assigned_to ?? '',
+      provider: record.supplier_id != null ? `#${record.supplier_id}` : '',
       pricing: {
         total: record.total_iqd || 0,
         currency: 'IQD',
-        cost: record.supplier_cost_usd || 0,
+        cost: record.supplier_cost_usd ?? null,
         paid: record.collected_iqd || 0,
         balance: record.due_iqd || 0,
       },
@@ -185,10 +182,6 @@ export const bookingsApi = {
     const baseUrl = getApiBaseUrl();
     const query = new URLSearchParams();
     if (params.limit != null) query.set('limit', String(params.limit));
-    if (params.offset != null) query.set('offset', String(params.offset));
-    if (params.status) query.set('status', params.status);
-    if (params.service) query.set('service', params.service);
-    if (params.customer) query.set('customer', params.customer);
 
     const queryString = query.toString();
     const cacheKey = queryString || '__default__';
@@ -243,7 +236,11 @@ export const bookingsApi = {
       headers,
       body: JSON.stringify(body),
     });
-    return await handleBookingResponse<BookingRecord>(res);
+    const created = await handleBookingResponse<BookingRecord>(res);
+    // A list request may have completed while this POST was in flight and
+    // repopulated the cache with a pre-create snapshot.
+    invalidateBookingsCache();
+    return created;
   },
 
   /**
@@ -258,6 +255,63 @@ export const bookingsApi = {
     return await handleBookingResponse<BookingRecord>(res);
   },
 
+  /** API 043 | Issue an eligible paid booking and create its voucher. */
+  async issueBooking(id: number | string): Promise<BookingRecord> {
+    invalidateBookingsCache();
+    const baseUrl = getApiBaseUrl();
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/bookings/${encodeURIComponent(id)}/issue`, { method: 'POST' });
+    const record = await handleBookingResponse<BookingRecord>(res);
+    invalidateBookingsCache();
+    return record;
+  },
+
+  /** API 044 | Read the server workflow history. */
+  async getTimeline(id: number | string): Promise<unknown[]> {
+    const baseUrl = getApiBaseUrl();
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/bookings/${encodeURIComponent(id)}/timeline`);
+    const data = await handleBookingResponse<{ items?: unknown[] }>(res);
+    return Array.isArray(data?.items) ? data.items : [];
+  },
+
+  /** API 045 | Move a booking to a server supported staff workflow state. */
+  async updateWorkflow(id: number | string, state: 'processing' | 'confirmed'): Promise<BookingRecord> {
+    invalidateBookingsCache();
+    const baseUrl = getApiBaseUrl();
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/bookings/${encodeURIComponent(id)}/workflow`, {
+      method: 'PATCH', body: JSON.stringify({ state }),
+    });
+    const record = await handleBookingResponse<BookingRecord>(res);
+    invalidateBookingsCache();
+    return record;
+  },
+
+  /** API 046 | Read internal booking notes. */
+  async getNotes(id: number | string): Promise<unknown[]> {
+    const baseUrl = getApiBaseUrl();
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/bookings/${encodeURIComponent(id)}/notes`);
+    const data = await handleBookingResponse<{ items?: unknown[] }>(res);
+    return Array.isArray(data?.items) ? data.items : [];
+  },
+
+  /** API 047 | Add an internal booking note. */
+  async addNote(id: number | string, body: string): Promise<unknown> {
+    invalidateBookingsCache();
+    const baseUrl = getApiBaseUrl();
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/bookings/${encodeURIComponent(id)}/notes`, {
+      method: 'POST', body: JSON.stringify({ body }),
+    });
+    const result = await handleBookingResponse<unknown>(res);
+    invalidateBookingsCache();
+    return result;
+  },
+
+  /** API 049 | Read the issued voucher. */
+  async getVoucher(id: number | string): Promise<unknown> {
+    const baseUrl = getApiBaseUrl();
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/bookings/${encodeURIComponent(id)}/voucher`);
+    return handleBookingResponse<unknown>(res);
+  },
+
   /**
    * API 041 | Cancel eligible unissued booking | إلغاء حجز غير صادر
    * POST /api/v1/bookings/:id/cancel
@@ -269,7 +323,9 @@ export const bookingsApi = {
       method: 'POST',
       body: JSON.stringify({ reason }),
     });
-    return await handleBookingResponse<BookingRecord>(res);
+    const record = await handleBookingResponse<BookingRecord>(res);
+    invalidateBookingsCache();
+    return record;
   },
 
   /**
@@ -283,6 +339,8 @@ export const bookingsApi = {
       method: 'PATCH',
       body: JSON.stringify({ staff_user_id: staffUserId }),
     });
-    return await handleBookingResponse<BookingRecord>(res);
+    const record = await handleBookingResponse<BookingRecord>(res);
+    invalidateBookingsCache();
+    return record;
   },
 };

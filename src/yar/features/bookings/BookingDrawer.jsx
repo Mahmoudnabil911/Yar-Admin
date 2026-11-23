@@ -1,50 +1,54 @@
 import { uiLocale } from '../../i18n/prefs';
 import React, { useState, useMemo, useEffect } from 'react';
 import { Icon } from '../../components/ui/Icon';
-import { operationsStorage } from '../../services/storage/operationsStorage';
-import { catalogStorage } from '../../services/storage/catalogStorage';
-import { staffStorage } from '../../services/storage/staffStorage';
-import { operationsModel as M, supplierCreditModel as C } from '../../services/models';
+import { operationsModel as M } from '../../services/models';
 import { useToast } from '../../components/ui/Toast';
 import { useConfirm } from '../../components/ui/ConfirmDialog';
-import HotelOfferSnapshot from '../hotels/HotelOfferSnapshot';
 import { bookingsApi } from '../../services/api/bookingsApi';
-
-const serviceSchemas = {
-  flight: { origin: 'مدينة المغادرة', destination: 'مدينة الوصول', carrier: 'شركة الطيران', cabin: 'درجة السفر', travelDate: 'تاريخ الذهاب', returnDate: 'تاريخ العودة (اختياري)' },
-  hotel: { hotelName: 'الفندق', checkIn: 'الوصول', checkOut: 'المغادرة', rooms: 'أنواع الغرف وتوزيع الأشخاص' },
-  package: { packageName: 'اسم الباقة / الفندق', nights: 'عدد الليالي', travelDate: 'تاريخ السفر' },
-  transfer: { vehicle: 'السيارة', pickup: 'نقطة الاستقبال / خدمة الاستقبال والتوديع', travelDate: 'التاريخ', passengers: 'عدد الركاب' },
-  tour: { tourName: 'الجولة', pickup: 'نقطة الانطلاق', travelDate: 'التاريخ', passengers: 'عدد الأشخاص' }
-};
+import { catalogAdminApi } from '../../services/api/catalogAdminApi';
 
 export function BookingDrawer({ bookingId, onOpenFinance, onNavigate }) {
   const toast = useToast();
   const confirm = useConfirm();
-  const booking = operationsStorage.getBooking(bookingId);
-  const providers = catalogStorage.getRecords('providers');
-  const staffList = staffStorage.getStaff();
-  const ledger = operationsStorage.getCreditLedger();
 
   const [errorMsg, setErrorMsg] = useState('');
+  const [remoteRecord, setRemoteRecord] = useState(null);
+  const booking = remoteRecord ? bookingsApi.mapRecordToRow(remoteRecord) : null;
+  const isRemoteBooking = true;
+  const [remoteTimeline, setRemoteTimeline] = useState([]);
+  const [remoteNotes, setRemoteNotes] = useState([]);
+  const [remoteStaff, setRemoteStaff] = useState([]);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  const [remoteVoucher, setRemoteVoucher] = useState(null);
+  const [voucherLoading, setVoucherLoading] = useState(false);
 
-  // Editable service details
-  const [providerId, setProviderId] = useState(() => booking?.providerId || '');
-  const [route, setRoute] = useState(() => booking?.route || '');
-  const [detail, setDetail] = useState(() => booking?.detail || '');
-  const [reference, setReference] = useState(() => booking?.reference || '');
-  const [serviceInfo, setServiceInfo] = useState(() => booking?.serviceInfo || {});
-  const [travellersText, setTravellersText] = useState(() => {
-    return (booking?.travellers || []).map(p => p.name + (p.passport ? ' | ' + p.passport : '')).join('\n');
-  });
+  useEffect(() => {
+    let active = true;
+    setRemoteLoading(true);
+    Promise.allSettled([bookingsApi.getBooking(bookingId), bookingsApi.getTimeline(bookingId), bookingsApi.getNotes(bookingId), catalogAdminApi.getUsers()])
+      .then(([record, timeline, notes, staff]) => {
+        if (!active) return;
+        if (record.status === 'fulfilled') setRemoteRecord(record.value);
+        else setErrorMsg(record.reason?.ar || record.reason?.message || 'تعذر تحميل الحجز.');
+        if (timeline.status === 'fulfilled') setRemoteTimeline(timeline.value);
+        if (notes.status === 'fulfilled') setRemoteNotes(notes.value);
+        if (staff.status === 'fulfilled') setRemoteStaff((staff.value.items || []).filter(user => ['admin', 'booking_employee'].includes(user.role) && user.active === true));
+      })
+      .finally(() => { if (active) setRemoteLoading(false); });
+    return () => { active = false; };
+  }, [bookingId]);
+  useEffect(() => {
+    if (remoteRecord) setAssignedId(remoteRecord.assigned_to == null ? '' : String(remoteRecord.assigned_to));
+  }, [remoteRecord]);
 
   // State transition
   const allowedTransitions = useMemo(() => {
     if (!booking) return [];
     return {
       awaiting: ['processing', 'cancelled'],
-      processing: ['issued', 'cancelled'],
-      issued: ['cancelled'],
+      processing: ['confirmed', 'cancelled'],
+      confirmed: ['processing', 'issued', 'cancelled'],
+      issued: [],
       cancelled: []
     }[booking.status] || [];
   }, [booking]);
@@ -57,22 +61,15 @@ export function BookingDrawer({ bookingId, onOpenFinance, onNavigate }) {
   const [transitionReason, setTransitionReason] = useState('');
   const [cancellationAck, setCancellationAck] = useState(false);
 
-  // Supplier credit issue inputs
-  // New bookings carry a USD supplier net; supplier deductions use it. Older bookings keep their original behaviour.
-  const [creditCurrency, setCreditCurrency] = useState(() => booking?.supplierNet ? 'USD' : (booking?.currency || 'USD'));
-  const [creditAmount, setCreditAmount] = useState(() => booking?.supplierNet?.amount ?? booking?.pricing?.cost ?? '');
-  const [confirmCurrencyDiff, setConfirmCurrencyDiff] = useState(false);
-
   // Follow-up & Assignment
   const [assignedId, setAssignedId] = useState(() => booking?.assignedId || '');
   const [followupNote, setFollowupNote] = useState('');
 
-  if (!booking) return null;
+  if (!booking) return <div className="ops-note" role="status">{remoteLoading ? 'جاري تحميل بيانات الحجز...' : (errorMsg || 'تعذر تحميل الحجز.')}</div>;
 
-  const b = M.balances(booking);
-  const pStatus = booking.payment || (M.paymentStatus(booking) === 'paid' ? 'paid' : 'pending');
+  const b = { collected: Number(booking.collected_iqd) || 0, refunded: Number(booking.refunded_iqd) || 0, netCollected: (Number(booking.collected_iqd) || 0) - (Number(booking.refunded_iqd) || 0), balance: Number(booking.due_iqd) || 0, supplierPaid: 0 };
+  const pStatus = b.balance <= 0 && Number(booking.total_iqd) > 0 ? 'paid' : 'pending';
   const currency = booking.currency || 'IQD';
-  const isEditable = ['awaiting', 'processing'].includes(booking.status);
 
   const numFormat = new Intl.NumberFormat('en-US', {
     minimumFractionDigits: currency === 'USD' ? 2 : 0,
@@ -80,38 +77,18 @@ export function BookingDrawer({ bookingId, onOpenFinance, onNavigate }) {
   });
   const money = val => `${numFormat.format(Number(val) || 0)} ${currency === 'USD' ? '$' : 'د.ع'}`;
 
-  // Eligible providers for this service
-  const serviceProviders = providers.filter(p =>
-    p.status === 'published' &&
-    p.operatingEnabled !== false &&
-    (p.serviceType === booking.service || (booking.service === 'tour' && p.serviceType === 'transfer'))
-  );
-
   // Eligible staff with bookings permission
-  const eligibleStaff = staffList.filter(s =>
-    s.status === 'active' && (s.role === 'admin' || (s.permissions || []).includes('bookings'))
-  );
+  const eligibleStaff = remoteStaff;
 
-  const handleSaveDetails = e => {
-    e.preventDefault();
+  const handleReadVoucher = async () => {
+    setVoucherLoading(true);
     setErrorMsg('');
     try {
-      const travellers = travellersText.split(/\r?\n/).map(v => v.trim()).filter(Boolean).map(v => {
-        const [name, passport = ''] = v.split('|');
-        return { name: name.trim(), passport: passport.trim() };
-      });
-
-      operationsStorage.updateDetails(booking.id, {
-        providerId,
-        route,
-        detail,
-        reference,
-        serviceInfo,
-        travellers
-      });
-      toast('حُفظت تفاصيل الخدمة.');
+      setRemoteVoucher(await bookingsApi.getVoucher(booking.rawId));
     } catch (err) {
-      setErrorMsg(err.message);
+      setErrorMsg(err.message || 'تعذر تحميل القسيمة.');
+    } finally {
+      setVoucherLoading(false);
     }
   };
 
@@ -122,55 +99,50 @@ export function BookingDrawer({ bookingId, onOpenFinance, onNavigate }) {
       const ok = await confirm({
         title: 'تأكيد الإجراء',
         message: targetStatus === 'cancelled'
-          ? 'إلغاء الحجز لا يسترد أموال العميل ولا يعيد رصيد المورّد تلقائيًا.'
-          : 'سيتم خصم تكلفة المورّد من رصيده مسبق الدفع.',
+          ? 'سيُرسل طلب إلغاء الحجز إلى الخادم. تأكد من مراجعة حالة التحصيل والاسترداد.'
+          : isRemoteBooking ? 'سيصدر الخادم قسيمة الحجز إذا استوفى شروط الإصدار.' : 'سيتم خصم تكلفة المورّد من رصيده مسبق الدفع.',
         danger: targetStatus === 'cancelled',
       });
       if (!ok) return;
     }
     try {
-      if (targetStatus === 'issued') {
-        // Run issue with supplier credit debit
-        operationsStorage.issueWithSupplierCredit(booking.id, {
-          currency: creditCurrency,
-          amount: Number(creditAmount),
-          confirmCurrency: confirmCurrencyDiff
-        });
-        toast('تم تأكيد وإصدار الطلب وخصم تكلفة المزوّد.');
+      if (isRemoteBooking) {
+        let updatedRecord;
+        if (targetStatus === 'issued') updatedRecord = await bookingsApi.issueBooking(booking.rawId);
+        else if (targetStatus === 'cancelled') updatedRecord = await bookingsApi.cancelBooking(booking.rawId, transitionReason);
+        else if (targetStatus === 'processing') updatedRecord = await bookingsApi.updateWorkflow(booking.rawId, 'processing');
+        else if (targetStatus === 'confirmed') updatedRecord = await bookingsApi.updateWorkflow(booking.rawId, 'confirmed');
+        else throw new Error('الحالة المطلوبة غير مدعومة.');
+        setRemoteRecord(updatedRecord);
+        setRemoteTimeline(await bookingsApi.getTimeline(booking.rawId));
+        window.dispatchEvent(new CustomEvent('yar:bookings-updated'));
+        toast(`تم تحديث حالة الحجز على الخادم إلى ${({ confirmed: 'مؤكد', ...M.statuses })[targetStatus] || targetStatus}.`);
+        return;
       } else {
-        operationsStorage.transitionStatus(booking.id, targetStatus, {
-          reason: transitionReason,
-          confirmPaidCancellation: cancellationAck
-        });
-        if (targetStatus === 'cancelled') {
-          bookingsApi.cancelBooking(booking.rawId || booking.id, transitionReason).catch(err => {
-            console.warn('Odoo booking cancel note:', err.message);
-          });
-        }
-        toast(`تم تغيير حالة الطلب إلى ${M.statuses[targetStatus] || targetStatus}.`);
+        throw new Error('الحالة المطلوبة غير مدعومة.');
       }
     } catch (err) {
       setErrorMsg(err.message);
     }
   };
 
-  const handleSaveNoteAndAssign = e => {
+  const handleSaveNoteAndAssign = async e => {
     e.preventDefault();
     setErrorMsg('');
     try {
-      if (assignedId !== booking.assignedId) {
-        operationsStorage.assignStaff(booking.id, assignedId);
-        if (Number.isInteger(Number(assignedId))) {
-          bookingsApi.assignBooking(booking.rawId || booking.id, Number(assignedId)).catch(err => {
-            console.warn('Odoo booking assign note:', err.message);
-          });
-        }
+      if (isRemoteBooking && assignedId !== booking.assignedId) {
+        if (!assignedId) throw new Error('إلغاء تعيين الموظف غير متاح من الـAPI.');
+        const updatedRecord = await bookingsApi.assignBooking(booking.rawId, Number(assignedId));
+        setRemoteRecord(updatedRecord);
+        setAssignedId(String(updatedRecord.assigned_to || assignedId));
       }
-      if (followupNote.trim()) {
-        operationsStorage.addNote(booking.id, followupNote.trim());
+      if (isRemoteBooking && followupNote.trim()) {
+        await bookingsApi.addNote(booking.rawId, followupNote.trim());
+        setRemoteNotes(await bookingsApi.getNotes(booking.rawId));
         setFollowupNote('');
       }
-      toast('حُفظت المتابعة والإسناد.');
+      if (isRemoteBooking) window.dispatchEvent(new CustomEvent('yar:bookings-updated'));
+      toast(isRemoteBooking ? 'حُفظت المتابعة والإسناد على الخادم.' : 'حُفظت المتابعة والإسناد.');
     } catch (err) {
       setErrorMsg(err.message);
     }
@@ -185,17 +157,17 @@ export function BookingDrawer({ bookingId, onOpenFinance, onNavigate }) {
           <span style={{ fontSize: 12, color: 'var(--muted)', direction: 'ltr' }}>{booking.id}</span>
         </div>
         <div style={{ display: 'flex', gap: 6, margin: '6px 0', alignItems: 'center' }}>
-          <span className={`status ${booking.status}`}>{M.statuses[booking.status] || booking.status}</span>
+          <span className={`status ${booking.status}`}>{({ confirmed: 'مؤكد', ...M.statuses })[booking.status] || booking.status}</span>
           <span className={`payment-status ${pStatus}`}>
             <span className="tiny-dot"></span>
             {{ paid: 'مدفوع', pending: 'بانتظار الدفع', review: 'قيد المراجعة' }[pStatus] || pStatus}
           </span>
         </div>
         <p style={{ margin: '4px 0', fontSize: 13, color: 'var(--ink)' }}>
-          {M.services[booking.service] || booking.service} · {booking.route}
+          {M.services[booking.service] || booking.service} · مرجع الحجز {booking.reference}
         </p>
         <small style={{ color: 'var(--muted)', fontSize: 12 }}>
-          المصدر: {{ app: 'تطبيق YAR', whatsapp: 'واتساب', office: 'المكتب' }[booking.source] || booking.source} · هاتف: {booking.phone} · تاريخ: {booking.date}
+          رقم العميل: {booking.customer_id ?? '—'} · الهاتف: {booking.phone || '—'} · تاريخ الإنشاء: {booking.date || '—'}
         </small>
       </div>
 
@@ -209,48 +181,14 @@ export function BookingDrawer({ bookingId, onOpenFinance, onNavigate }) {
       <section className="ops-section">
         <h3>لقطة السعر المحفوظة</h3>
         <div className="ops-money-lines" style={{ marginBottom: 12 }}>
-          {booking.supplierNet && (
-            <>
-              <div>
-                <span>صافي المورّد</span>
-                <strong><bdi>{Number(booking.supplierNet.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</bdi></strong>
-              </div>
-              <div>
-                <span>سعر التحويل المحفوظ</span>
-                <strong><bdi dir="ltr">1 $ = {Number(booking.supplierNet.rate).toLocaleString('en-US')} د.ع · {booking.supplierNet.rateDate}</bdi></strong>
-              </div>
-            </>
-          )}
-          <div>
-            <span>{booking.supplierNet ? 'تكلفة المورّد بالدينار' : 'تكلفة المزوّد'}</span>
-            <strong><bdi>{money(booking.pricing.cost)}</bdi></strong>
-          </div>
-          <div>
-            <span>الزيادة المحفوظة</span>
-            <strong><bdi>{money(booking.pricing.markupAmount)}</bdi></strong>
-          </div>
-          <div>
-            <span>السعر الأصلي</span>
-            <strong><bdi>{money(booking.pricing.original)}</bdi></strong>
-          </div>
-          <div>
-            <span>الخصم المطبق</span>
-            <strong><bdi>{money(booking.pricing.discountAmount)}</bdi></strong>
-          </div>
-          <div>
-            <span>السعر النهائي للبيع</span>
-            <strong style={{ color: 'var(--c-2b5028)', fontSize: 14 }}><bdi>{money(booking.amount)}</bdi></strong>
-          </div>
-          <div>
-            <span>الهامش النظري</span>
-            <strong style={{ color: booking.pricing.margin >= 0 ? 'var(--c-3b6632)' : 'var(--c-924b42)' }}>
-              <bdi>{money(booking.pricing.margin)}</bdi>
-            </strong>
-          </div>
+          <div><span>السعر النهائي المحفوظ</span><strong><bdi>{money(booking.total_iqd)}</bdi></strong></div>
+          <div><span>المحصّل</span><strong><bdi>{money(booking.collected_iqd)}</bdi></strong></div>
+          <div><span>المسترد</span><strong><bdi>{money(booking.refunded_iqd)}</bdi></strong></div>
+          <div><span>المتبقي</span><strong><bdi>{money(booking.due_iqd)}</bdi></strong></div>
+          {booking.supplier_cost_usd != null && <div><span>تكلفة المورّد</span><strong><bdi>{Number(booking.supplier_cost_usd).toLocaleString('en-US')} USD</bdi></strong></div>}
+          {booking.fx_rate_snapshot != null && <div><span>سعر الصرف المحفوظ</span><strong><bdi dir="ltr">1 USD = {Number(booking.fx_rate_snapshot).toLocaleString('en-US')} IQD · {booking.fx_date || '—'}</bdi></strong></div>}
         </div>
-        <p className="ops-note" style={{ marginBottom: 12 }}>
-          القاعدة المطبقة: {booking.pricing.ruleLabel || 'تسعير يدوي محفوظ وقت إنشاء الطلب'}
-        </p>
+        <p className="ops-note" style={{ marginBottom: 12 }}>الأسعار والأرصدة مأخوذة من سجل الحجز في الخادم.</p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button
             type="button"
@@ -262,107 +200,22 @@ export function BookingDrawer({ bookingId, onOpenFinance, onNavigate }) {
         </div>
       </section>
 
-      {/* Service Details */}
       <section className="ops-section">
         <h3>تفاصيل الخدمة</h3>
-        <p style={{ margin: '4px 0', fontSize: 13 }}>{booking.detail}</p>
-        <p style={{ margin: '4px 0 12px 0', fontSize: 12, color: 'var(--muted)' }}>
-          المزوّد: <strong>{booking.provider}</strong> · مرجع التأكيد: <bdi>{booking.reference || 'غير محدد'}</bdi>
-        </p>
-
-        {booking.service === 'hotel' && <HotelOfferSnapshot offer={booking.serviceInfo?.hotelOffer} />}
-        {isEditable ? (
-          <form className="ops-form-grid" onSubmit={handleSaveDetails}>
-            <label className="ops-field wide">
-              <span>المزوّد (مراجعة عند التأكيد)</span>
-              <select value={providerId} onChange={e => setProviderId(e.target.value)}>
-                <option value="">اختر المزوّد</option>
-                {serviceProviders.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className="ops-field wide">
-              <span>المسار</span>
-              <input
-                type="text"
-                value={route}
-                onChange={e => setRoute(e.target.value)}
-                required
-              />
-            </label>
-
-            <label className="ops-field wide">
-              <span>تفاصيل الطلب</span>
-              <textarea
-                rows="2"
-                value={detail}
-                onChange={e => setDetail(e.target.value)}
-                required
-              />
-            </label>
-
-            <label className="ops-field wide">
-              <span>مرجع التأكيد / PNR</span>
-              <input
-                type="text"
-                value={reference}
-                onChange={e => setReference(e.target.value)}
-                placeholder="رقم الحجز أو PNR"
-              />
-            </label>
-
-            {/* Service-specific schema fields */}
-            {Object.entries(serviceSchemas[booking.service] || {}).map(([key, label]) => (
-              <label className="ops-field" key={key}>
-                <span>{label}</span>
-                <input
-                  type={/Date$|checkIn|checkOut/.test(key) ? 'date' : 'text'}
-                  value={serviceInfo[key] || ''}
-                  onChange={e => setServiceInfo({ ...serviceInfo, [key]: e.target.value })}
-                />
-              </label>
-            ))}
-
-            <label className="ops-field wide">
-              <span>المسافرون · اسم | جواز تجريبي، كل مسافر بسطر</span>
-              <textarea
-                rows="3"
-                value={travellersText}
-                onChange={e => setTravellersText(e.target.value)}
-                placeholder="أحمد علي | DEMO123&#10;نور كريم | DEMO124"
-              />
-            </label>
-
-            <button type="submit" className="button secondary wide">
-              حفظ التفاصيل دون تغيير السعر
-            </button>
-          </form>
-        ) : (
-          <div>
-            <dl className="ops-info" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, margin: '10px 0' }}>
-              {Object.entries(serviceSchemas[booking.service] || {}).map(([k, l]) => (
-                <div key={k}>
-                  <dt style={{ color: 'var(--muted)' }}>{l}:</dt>
-                  <dd style={{ margin: 0, fontWeight: 500 }}>{serviceInfo[k] || 'غير مسجل في المثال'}</dd>
-                </div>
-              ))}
-            </dl>
-            <div style={{ fontSize: 12, marginTop: 8 }}>
-              <strong>المسافرون:</strong>
-              {booking.travellers?.length > 0 ? (
-                booking.travellers.map((p, idx) => (
-                  <div key={idx} style={{ color: 'var(--ink)' }}>
-                    {p.name} {p.passport && `· جواز: ${p.passport}`}
-                  </div>
-                ))
-              ) : (
-                <p className="ops-note">تفاصيل المسافرين غير مرفقة في سجل المثال القديم.</p>
-              )}
-            </div>
-          </div>
-        )}
+        <dl className="ops-info" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, margin: '10px 0' }}>
+          <div><dt>النوع</dt><dd>{booking.service_type}</dd></div>
+          <div><dt>معرّف الخدمة</dt><dd>{booking.service_id ?? '—'}</dd></div>
+          <div><dt>معرّف الخيار</dt><dd>{booking.service_option_id ?? '—'}</dd></div>
+          <div><dt>معرّف سعر الغرفة</dt><dd>{booking.hotel_rate_id ?? '—'}</dd></div>
+          <div><dt>تاريخ الوصول</dt><dd>{booking.checkin || '—'}</dd></div>
+          <div><dt>تاريخ المغادرة</dt><dd>{booking.checkout || '—'}</dd></div>
+          <div><dt>موعد الانطلاق</dt><dd>{booking.departure_at || '—'}</dd></div>
+          <div><dt>موعد العودة</dt><dd>{booking.return_at || '—'}</dd></div>
+          <div><dt>الكمية</dt><dd>{booking.quantity ?? '—'}</dd></div>
+          <div><dt>البالغون / الأطفال</dt><dd>{booking.adults ?? '—'} / {booking.children ?? '—'}</dd></div>
+          <div><dt>مرجع المزوّد</dt><dd>{booking.provider_reference || '—'}</dd></div>
+          <div><dt>مرجع التذكرة</dt><dd>{booking.ticket_reference || '—'}</dd></div>
+        </dl>
       </section>
 
       {/* Status Transition */}
@@ -374,53 +227,10 @@ export function BookingDrawer({ bookingId, onOpenFinance, onNavigate }) {
               <span>الإجراء التالي</span>
               <select value={targetStatus} onChange={e => setTargetStatus(e.target.value)}>
                 {allowedTransitions.map(s => (
-                  <option key={s} value={s}>{M.statuses[s] || s}</option>
+                  <option key={s} value={s}>{({ confirmed: 'مؤكد', ...M.statuses })[s] || s}</option>
                 ))}
               </select>
             </label>
-
-            {targetStatus === 'issued' && (
-              <div className="wide" style={{ border: '1px solid var(--c-c9d8c4)', padding: 12, borderRadius: 8, background: 'var(--c-f5f9f3)', marginBottom: 10 }}>
-                <strong style={{ fontSize: 12, color: 'var(--c-2d4d24)', display: 'block', marginBottom: 8 }}>
-                  خصم تكلفة المزوّد من الرصيد مسبق الدفع
-                </strong>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <label className="ops-field">
-                    <span>عملة خصم المورّد</span>
-                    {booking.supplierNet ? (
-                      <input value="USD" readOnly dir="ltr" />
-                    ) : (
-                      <select value={creditCurrency} onChange={e => setCreditCurrency(e.target.value)}>
-                        <option value="USD">USD</option>
-                        <option value="IQD">IQD</option>
-                      </select>
-                    )}
-                  </label>
-                  <label className="ops-field">
-                    <span>المبلغ المخصوم من الرصيد</span>
-                    <input
-                      type="number"
-                      step="any"
-                      value={creditAmount}
-                      onChange={e => setCreditAmount(e.target.value)}
-                      required
-                    />
-                  </label>
-                </div>
-                {booking.supplierNet && <p className="ops-note">يُخصم صافي المورّد بالدولار من رصيد المورّد؛ سعر العميل يبقى بالدينار.</p>}
-                {!booking.supplierNet && creditCurrency !== booking.currency && (
-                  <label className="ops-field wide" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-                    <input
-                      type="checkbox"
-                      checked={confirmCurrencyDiff}
-                      onChange={e => setConfirmCurrencyDiff(e.target.checked)}
-                      required
-                    />
-                    <span style={{ fontSize: 12 }}>أكّد قيمة الخصم بعملة المورّد؛ لا يوجد تحويل عملة تلقائي.</span>
-                  </label>
-                )}
-              </div>
-            )}
 
             {targetStatus === 'cancelled' && (
               <>
@@ -450,7 +260,7 @@ export function BookingDrawer({ bookingId, onOpenFinance, onNavigate }) {
             )}
 
             <button type="submit" className="button primary wide">
-              تطبيق الإجراء المحلي
+              {isRemoteBooking ? 'تطبيق الإجراء على الخادم' : 'تطبيق الإجراء المحلي'}
             </button>
           </form>
         </section>
@@ -493,16 +303,24 @@ export function BookingDrawer({ bookingId, onOpenFinance, onNavigate }) {
       {/* Timeline */}
       <section className="ops-section">
         <h3>سجل المتابعة</h3>
+        {isRemoteBooking && booking.status === 'issued' && (
+          <button type="button" className="button secondary" onClick={handleReadVoucher} disabled={voucherLoading}>
+            {voucherLoading ? 'جاري تحميل القسيمة...' : 'عرض قسيمة الحجز'}
+          </button>
+        )}
+        {remoteVoucher && <pre dir="auto" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: 12 }}>{JSON.stringify(remoteVoucher, null, 2)}</pre>}
         <ol className="ops-timeline" style={{ paddingInlineStart: 16, margin: 0 }}>
-          {booking.timeline.slice().reverse().map(event => (
-            <li key={event.id} style={{ marginBottom: 12 }}>
-              <strong style={{ display: 'block', fontSize: 12 }}>{event.note}</strong>
+          {(isRemoteBooking ? remoteTimeline : (booking.timeline || [])).slice().reverse().map((event, idx) => (
+            <li key={event.id || idx} style={{ marginBottom: 12 }}>
+              <strong style={{ display: 'block', fontSize: 12 }}>{event.note || event.body || event.state || event.action || 'تحديث حالة الحجز'}</strong>
               <small style={{ fontSize: 11, color: 'var(--muted)' }}>
-                <bdi>{new Date(event.at).toLocaleString(uiLocale(), { timeZone: 'Asia/Baghdad' })}</bdi> · {event.staffName}
+                <bdi>{new Date(event.at || event.created_at || event.createdAt || Date.now()).toLocaleString(uiLocale(), { timeZone: 'Asia/Baghdad' })}</bdi> · {event.staffName || event.actor_name || ''}
               </small>
             </li>
           ))}
         </ol>
+        {remoteLoading && <p className="ops-note">جاري تحميل سجل الخادم...</p>}
+        {isRemoteBooking && remoteNotes.length > 0 && <div style={{ marginTop: 14 }}><strong>ملاحظات داخلية</strong>{remoteNotes.map((note, index) => <p key={note.id || index} className="ops-note">{note.body || note.note || note.text}</p>)}</div>}
       </section>
     </div>
   );

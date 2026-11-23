@@ -1,12 +1,8 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Icon } from '../../components/ui/Icon';
-import { operationsStorage } from '../../services/storage/operationsStorage';
-import { catalogStorage } from '../../services/storage/catalogStorage';
-import { staffStorage } from '../../services/storage/staffStorage';
 import { operationsModel as M } from '../../services/models';
 import { useToast } from '../../components/ui/Toast';
 import { bookingsApi } from '../../services/api/bookingsApi';
-import { getAccessToken, isAuthenticated } from '../../services/api/authApi';
 
 export function BookingsPage({
   onOpenBooking,
@@ -21,8 +17,9 @@ export function BookingsPage({
   const effectiveSearchQuery = searchQuery || externalQuery || '';
 
   const [backendItems, setBackendItems] = useState(null);
-  const [providers, setProviders] = useState(() => catalogStorage.getRecords('providers'));
-  const [staffList, setStaffList] = useState(() => staffStorage.getStaff());
+  const [loadError, setLoadError] = useState('');
+  const providers = useMemo(() => [...new Map((backendItems || []).filter(r => r.supplier_id != null).map(r => [String(r.supplier_id), { id: r.supplier_id, name: r.provider || `#${r.supplier_id}` }])).values()], [backendItems]);
+  const staffList = useMemo(() => [...new Map((backendItems || []).filter(r => r.assignedId != null && r.assignedId !== '').map(r => [String(r.assignedId), { id: r.assignedId, name: r.assigned || `#${r.assignedId}` }])).values()], [backendItems]);
 
   const [filters, setFilters] = useState({
     service: 'all',
@@ -30,7 +27,6 @@ export function BookingsPage({
     status: 'all',
     providerId: 'all',
     assignedId: 'all',
-    source: 'all',
     paymentStatus: 'all',
     startDate: '',
     endDate: ''
@@ -38,39 +34,50 @@ export function BookingsPage({
 
   const [page, setPage] = useState(1);
   const pageSize = 10;
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(true);
+  const transientFailuresRef = useRef(0);
+  const retryTimerRef = useRef(null);
 
   const loadBackendBookings = useCallback(async (force = false) => {
     setIsSyncing(true);
     try {
       const res = await bookingsApi.listBookings({ limit: 100 }, force);
       if (res && Array.isArray(res.items)) {
+        transientFailuresRef.current = 0;
+        if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
         const mapped = res.items.map(bookingsApi.mapRecordToRow);
         setBackendItems(mapped);
-        operationsStorage.records = mapped;
-        operationsStorage.notify();
+        window.dispatchEvent(new CustomEvent('yar:bookings-loaded', { detail: mapped }));
+        setLoadError('');
+        return true;
       } else {
         setBackendItems([]);
-        operationsStorage.records = [];
-        operationsStorage.notify();
+        setLoadError('استجابة الحجوزات غير مكتملة.');
+        return false;
       }
     } catch (err) {
       console.warn('Backend bookings fetch:', err);
-      if (!isAuthenticated()) {
-        setBackendItems(operationsStorage.getBookings());
-      } else {
-        // Do not wipe out existing data on transient network hiccups
-        setBackendItems(prev => prev || []);
+      setLoadError(err?.ar || err?.message || 'تعذر تحميل الحجوزات.');
+      setBackendItems(prev => prev || []);
+      const transient = err?.status === 502 || err?.status === 504 || err instanceof TypeError;
+      if (transient && transientFailuresRef.current < 2) {
+        transientFailuresRef.current += 1;
+        const delay = transientFailuresRef.current * 1500;
+        retryTimerRef.current = setTimeout(() => loadBackendBookings(true), delay);
       }
+      return false;
     } finally {
       setIsSyncing(false);
     }
   }, []);
 
   const handleSync = async () => {
+    transientFailuresRef.current = 0;
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
     try {
-      await loadBackendBookings(true);
-      toast('تمت مزامنة الحجوزات مع الخادم.');
+      const ok = await loadBackendBookings(true);
+      toast(ok ? 'تمت مزامنة الحجوزات مع الخادم.' : 'تعذرت المزامنة مع الخادم.');
     } catch {
       toast('تعذرت المزامنة مع الخادم.');
     }
@@ -79,33 +86,54 @@ export function BookingsPage({
   useEffect(() => {
     loadBackendBookings();
 
-    const handleUpdate = () => loadBackendBookings();
+    const handleUpdate = event => {
+      transientFailuresRef.current = 0;
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      const created = event?.detail;
+      if (created?.id != null) {
+        const createdRow = bookingsApi.mapRecordToRow(created);
+        setBackendItems(current => {
+          const rows = current || [];
+          return [createdRow, ...rows.filter(row => row.rawId !== createdRow.rawId && row.id !== createdRow.id)];
+        });
+      }
+      loadBackendBookings();
+    };
     window.addEventListener('yar:bookings-updated', handleUpdate);
 
-    const unsubCat = catalogStorage.subscribe(() => setProviders(catalogStorage.getRecords('providers')));
-    const unsubStaff = staffStorage.subscribe(() => setStaffList(staffStorage.getStaff()));
     return () => {
       window.removeEventListener('yar:bookings-updated', handleUpdate);
-      unsubCat();
-      unsubStaff();
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
     };
   }, [loadBackendBookings]);
 
   const activeBookings = useMemo(() => {
     if (backendItems !== null) return backendItems;
-    if (getAccessToken()) return [];
-    return operationsStorage.getBookings();
+    return [];
   }, [backendItems]);
 
   const numFormat = useMemo(() => new Intl.NumberFormat('en-US'), []);
   const num = val => numFormat.format(Number(val) || 0);
+  const statusLabels = { ...M.statuses, confirmed: 'مؤكد' };
 
   // Filtered rows
   const filteredRows = useMemo(() => {
     try {
-      return M.filter(activeBookings, {
-        ...filters,
-        query: effectiveSearchQuery
+      const query = effectiveSearchQuery.trim().toLocaleLowerCase();
+      return activeBookings.filter(r => {
+        const paid = r.due_iqd != null
+          ? Number(r.due_iqd) <= 0
+          : Number(r.total_iqd) > 0 && Number(r.collected_iqd || 0) >= Number(r.total_iqd);
+        const date = r.date || '';
+        return (filters.service === 'all' || r.service === filters.service)
+          && (filters.currency === 'all' || r.currency === filters.currency)
+          && (filters.status === 'all' || r.status === filters.status)
+          && (filters.providerId === 'all' || String(r.supplier_id || '') === filters.providerId)
+          && (filters.assignedId === 'all' || String(r.assignedId || '') === filters.assignedId)
+          && (filters.paymentStatus === 'all' || (filters.paymentStatus === 'paid') === paid)
+          && (!filters.startDate || date >= filters.startDate)
+          && (!filters.endDate || date <= filters.endDate)
+          && (!query || `${r.id} ${r.customer || ''} ${r.customer_phone || ''} ${r.reference || ''}`.toLocaleLowerCase().includes(query));
       });
     } catch {
       return [];
@@ -118,7 +146,7 @@ export function BookingsPage({
     const awaiting = filteredRows.filter(r => r.status === 'awaiting').length;
     const processing = filteredRows.filter(r => r.status === 'processing').length;
     const unpaid = filteredRows.filter(r =>
-      !['cancelled', 'rejected'].includes(r.status) && M.paymentStatus(r) === 'unpaid'
+      !['cancelled', 'rejected'].includes(r.status) && (r.due_iqd != null ? Number(r.due_iqd) > 0 : Number(r.collected_iqd || 0) < Number(r.total_iqd || 0))
     ).length;
     return { total, awaiting, processing, unpaid };
   }, [filteredRows]);
@@ -136,7 +164,6 @@ export function BookingsPage({
       status: 'all',
       providerId: 'all',
       assignedId: 'all',
-      source: 'all',
       paymentStatus: 'all',
       startDate: '',
       endDate: ''
@@ -147,43 +174,17 @@ export function BookingsPage({
 
   const handleExportCSV = () => {
     try {
-      const rows = [
-        ['رقم الطلب', 'تاريخ الطلب', 'العميل', 'الهاتف المقنّع', 'الخدمة', 'المصدر', 'حالة الحجز', 'حالة الدفع', 'العملة', 'تكلفة المزوّد', 'الزيادة', 'السعر الأصلي', 'الخصم', 'السعر النهائي', 'المحصّل', 'المسترد', 'صافي المحصّل', 'الموظف', 'المزوّد'],
-        ...filteredRows.map(r => {
-          const b = M.balances(r);
-          return [
-            r.id,
-            r.date,
-            r.customer,
-            r.phone,
-            M.services[r.service] || r.service,
-            { app: 'تطبيق YAR', whatsapp: 'واتساب', office: 'المكتب' }[r.source] || r.source,
-            M.statuses[r.status] || r.status,
-            M.paymentStatus(r) === 'paid' ? 'مدفوع' : 'غير مدفوع',
-            r.currency,
-            r.pricing?.cost,
-            r.pricing?.markupAmount,
-            r.pricing?.original,
-            r.pricing?.discountAmount,
-            r.amount,
-            b.collected,
-            b.refunded,
-            b.netCollected,
-            r.assigned,
-            r.provider
-          ];
-        })
-      ];
-
-      const csv = operationsStorage.csv(rows);
+      const rows = [['رقم الطلب', 'تاريخ الإنشاء', 'العميل', 'الخدمة', 'الحالة', 'العملة', 'الإجمالي IQD', 'المحصّل IQD', 'المسترد IQD', 'المتبقي IQD', 'الموظف', 'المزوّد'],
+        ...filteredRows.map(r => [r.id, r.date, r.customer, M.services[r.service] || r.service, statusLabels[r.status] || r.status, r.currency, r.total_iqd, r.collected_iqd, r.refunded_iqd, r.due_iqd, r.assigned, r.provider])];
+      const csv = rows.map(row => row.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\r\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `YAR-demo-bookings-${M.today()}.csv`;
+      a.download = `YAR-bookings-${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast('صُدّرت طلبات المثال وفق المرشحات؛ العملة موضّحة لكل صف.');
+      toast('تم تصدير الحجوزات المحملة وفق المرشحات.');
     } catch (e) {
       toast(e.message);
     }
@@ -193,7 +194,7 @@ export function BookingsPage({
     <div className="ops-page">
       <div className="page-heading ops-heading">
         <div>
-          <div className="eyebrow">عمليات YAR</div>
+          <div className="eyebrow">عمليات الحجوزات والطلبات</div>
           <h1 id="operations-title" tabIndex={-1}>الحجوزات والطلبات</h1>
           <p>تابع الطلب من الاستفسار حتى التأكيد، مع تفاصيل الخدمة والمسؤول وسجل المتابعة.</p>
         </div>
@@ -232,6 +233,7 @@ export function BookingsPage({
       </div>
 
       <section className="panel ops-card">
+        {loadError && <div className="ops-form-error wide" role="alert" style={{ margin: 16 }}>{loadError} <button type="button" className="quiet-button" onClick={() => loadBackendBookings(true)}>إعادة المحاولة</button></div>}
         <div className="ops-toolbar" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <label className="ops-search" style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 260, maxWidth: 440, background: 'var(--c-f7f9f3)', border: '1px solid var(--c-e2e9da)', borderRadius: 7, padding: '7px 12px' }}>
             <i data-icon="search"><Icon name="search" /></i>
@@ -306,7 +308,7 @@ export function BookingsPage({
               onChange={e => { setFilters({ ...filters, status: e.target.value }); setPage(1); }}
             >
               <option value="all">كل الحالات</option>
-              {Object.entries(M.statuses).map(([k, v]) => (
+              {Object.entries(statusLabels).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}
             </select>
@@ -351,19 +353,6 @@ export function BookingsPage({
           </label>
 
           <label className="ops-field">
-            <span>المصدر</span>
-            <select
-              value={filters.source}
-              onChange={e => { setFilters({ ...filters, source: e.target.value }); setPage(1); }}
-            >
-              <option value="all">كل المصادر</option>
-              <option value="app">تطبيق YAR</option>
-              <option value="whatsapp">واتساب</option>
-              <option value="office">المكتب</option>
-            </select>
-          </label>
-
-          <label className="ops-field">
             <span>من تاريخ</span>
             <input
               type="date"
@@ -384,13 +373,15 @@ export function BookingsPage({
 
         {/* Table */}
         <div className="table-scroll">
-          {pageRows.length > 0 ? (
+          {isSyncing && backendItems === null ? (
+            <div className="empty-state" role="status" style={{ padding: 40, textAlign: 'center' }}>جاري تحميل الحجوزات...</div>
+          ) : pageRows.length > 0 ? (
             <table className="ops-table">
               <thead>
                 <tr>
                   <th>الطلب / العميل</th>
                   <th>الخدمة / المسار</th>
-                  <th>التاريخ / المصدر</th>
+                  <th>تاريخ الإنشاء</th>
                   <th>المبلغ</th>
                   <th>المسؤول / المزوّد</th>
                   <th>الحالة</th>
@@ -399,18 +390,17 @@ export function BookingsPage({
               </thead>
               <tbody>
                 {pageRows.map(r => {
-                  const initials = r.initials || r.customer.slice(0, 2);
-                  const isPaid = M.paymentStatus(r) === 'paid';
+                  const initials = r.initials || r.customer?.slice(0, 2);
+                  const isPaid = r.due_iqd != null ? Number(r.due_iqd) <= 0 : Number(r.total_iqd) > 0 && Number(r.collected_iqd || 0) >= Number(r.total_iqd);
                   const serviceLabel = M.services[r.service] || r.service;
-                  const sourceLabel = { app: 'تطبيق', whatsapp: 'واتساب', office: 'المكتب' }[r.source] || r.source;
 
                   return (
                     <tr key={r.id}>
                       <td>
                         <div className="customer-cell">
-                          <span className="customer-initial">{initials}</span>
+                          {initials && <span className="customer-initial">{initials}</span>}
                           <div>
-                            <strong className="customer-name">{r.customer}</strong>
+                            {r.customer && <strong className="customer-name">{r.customer}</strong>}
                             <span className="booking-id">{r.id}</span>
                           </div>
                         </div>
@@ -418,13 +408,11 @@ export function BookingsPage({
                       <td>
                         <div className="service-route">
                           <strong>{serviceLabel}</strong>
-                          <span>· {r.route}</span>
                         </div>
                         <small className="service-detail">{r.detail}</small>
                       </td>
                       <td>
                         <div>{r.date}</div>
-                        <small style={{ color: 'var(--muted)' }}>{sourceLabel}</small>
                       </td>
                       <td>
                         <div className="row-amount">
@@ -441,7 +429,7 @@ export function BookingsPage({
                       </td>
                       <td>
                         <span className={`status ${r.status}`}>
-                          {M.statuses[r.status] || r.status}
+                          {statusLabels[r.status] || r.status}
                         </span>
                       </td>
                       <td>
@@ -490,6 +478,7 @@ export function BookingsPage({
             </div>
           )}
         </div>
+        {activeBookings.length === 100 && <p className="ops-note" style={{ paddingInline: 20 }}>يعيد الخادم حتى 100 حجز في الطلب الواحد؛ الفلاتر الحالية تعمل على السجلات التي أرجعها الـAPI.</p>}
 
         {/* Footer */}
         <div className="table-footer">

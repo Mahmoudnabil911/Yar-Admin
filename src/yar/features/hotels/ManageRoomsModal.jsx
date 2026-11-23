@@ -266,7 +266,7 @@ export function ManageRoomsModal({
         {/* Loading state */}
         {isLoading ? (
           <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--muted)' }}>
-            جاري تحميل الغرف والأسعار من الخادم...
+            جاري تحميل الغرف والأسعار...
           </div>
         ) : rooms.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 20px', background: 'var(--panel-alt, rgba(0,0,0,0.02))', borderRadius: 10, border: '1px dashed var(--border)' }}>

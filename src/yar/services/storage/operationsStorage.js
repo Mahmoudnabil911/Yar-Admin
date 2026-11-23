@@ -140,7 +140,7 @@ class OperationsStorage {
 
   getBooking(id) {
     this.ensure();
-    return clone(this.records.find(r => r.id === id) || null);
+    return clone(this.records.find(r => r.id === id || r.rawId === id || String(r.rawId) === String(id)) || null);
   }
 
   createBooking(input, staffContext = {}) {

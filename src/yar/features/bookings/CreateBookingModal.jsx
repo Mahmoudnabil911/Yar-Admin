@@ -4,6 +4,16 @@ import { Drawer } from '../../components/ui/Drawer';
 import { bookingsApi } from '../../services/api/bookingsApi';
 import { catalogAdminApi } from '../../services/api/catalogAdminApi';
 
+function toLocalDateTimeInput(date) {
+  const pad = value => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function toLocalDateInput(date) {
+  const pad = value => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess }) {
   const isModalOpen = open !== undefined ? Boolean(open) : Boolean(isOpen);
   const toast = useToast();
@@ -17,19 +27,20 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
   const [servicesList, setServicesList] = useState([]);
   const [optionsList, setOptionsList] = useState([]);
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
-  const [isCreatingDemo, setIsCreatingDemo] = useState(false);
+  const [roomRatesError, setRoomRatesError] = useState('');
+  const [catalogLoadError, setCatalogLoadError] = useState('');
 
   // Hotel specific fields
   const [hotelRateId, setHotelRateId] = useState('');
   const [checkin, setCheckin] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 10);
+    return toLocalDateInput(d);
   });
   const [checkout, setCheckout] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 4);
-    return d.toISOString().slice(0, 10);
+    return toLocalDateInput(d);
   });
 
   // Services / Packages / Cars / Tours / Transfers
@@ -39,7 +50,7 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
     const d = new Date();
     d.setDate(d.getDate() + 2);
     d.setHours(9, 0, 0, 0);
-    return d.toISOString().slice(0, 16);
+    return toLocalDateTimeInput(d);
   });
   const [returnAt, setReturnAt] = useState('');
 
@@ -67,14 +78,22 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
         ]);
 
         if (!cancelled) {
+          const failures = [usersRes, ratesRes, servicesRes, optionsRes].filter(result => result.status === 'rejected');
+          setCatalogLoadError(failures.length ? 'تعذر تحميل بعض بيانات العملاء أو الخدمات. أعد المحاولة قبل إنشاء الحجز.' : '');
           if (usersRes.status === 'fulfilled' && Array.isArray(usersRes.value?.items)) {
-            setUsersList(usersRes.value.items);
+            const verifiedCustomers = usersRes.value.items.filter(user => user.role === 'customer' && user.verified === true && user.active !== false);
+            setUsersList(verifiedCustomers);
+            setCustomerId(current => verifiedCustomers.some(user => String(user.id) === String(current)) ? current : '');
           }
           if (ratesRes.status === 'fulfilled' && Array.isArray(ratesRes.value?.items)) {
-            setRoomRates(ratesRes.value.items);
-            if (ratesRes.value.items.length > 0 && !hotelRateId) {
-              setHotelRateId(String(ratesRes.value.items[0].id));
-            }
+            const activeRates = ratesRes.value.items.filter(rate => rate.active !== false && rate.published !== false);
+            setRoomRates(activeRates);
+            setRoomRatesError('');
+            setHotelRateId(current => activeRates.some(rate => String(rate.id) === String(current)) ? current : '');
+          } else if (ratesRes.status === 'rejected') {
+            setRoomRates([]);
+            setHotelRateId('');
+            setRoomRatesError(ratesRes.reason instanceof Error ? ratesRes.reason.message : 'تعذر تحميل أسعار الغرف.');
           }
           if (servicesRes.status === 'fulfilled' && Array.isArray(servicesRes.value?.items)) {
             setServicesList(servicesRes.value.items);
@@ -96,74 +115,24 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
 
   // Update selected serviceId when serviceType changes
   useEffect(() => {
-    const matching = servicesList.filter(s => s.service_type === serviceType);
-    if (matching.length > 0) {
-      setServiceId(String(matching[0].id));
-    } else {
-      setServiceId('');
-    }
+    const matching = servicesList.filter(s => s.service_type === serviceType && s.active !== false && s.published !== false);
+    setServiceId(current => matching.some(service => String(service.id) === String(current)) ? current : '');
   }, [serviceType, servicesList]);
 
   if (!isModalOpen) return null;
 
-  // Quick helper to seed a demo hotel and room rate in Odoo
-  const handleCreateDemoHotel = async () => {
-    setIsCreatingDemo(true);
-    setErrorMsg('');
+  const handleReloadRoomRates = async () => {
+    setIsLoadingCatalog(true);
+    setRoomRatesError('');
     try {
-      const hotel = await catalogAdminApi.createHotel({
-        name: 'فندق قصر يار التجريبي',
-        city: 'بغداد',
-        country: 'العراق',
-        stars: 5,
-      });
-
-      const rate = await catalogAdminApi.createRoomRate({
-        room_id: hotel.id,
-        name: 'غرفة ديلوكس مزدوجة مع إفطار',
-        meal_plan: 'BB',
-        price_usd: 120,
-        supplier_cost_usd: 80,
-      });
-
-      toast(`تم إنشاء فندق وسعر غرفة جديد على السيرفر برقم #${rate.id}`);
-      setRoomRates(prev => [rate, ...prev]);
-      setHotelRateId(String(rate.id));
+      const result = await catalogAdminApi.getRoomRates(undefined, true);
+      const activeRates = (result.items || []).filter(rate => rate.active !== false && rate.published !== false);
+      setRoomRates(activeRates);
+      setHotelRateId('');
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'فشل إنشاء فندق تجريبي على السيرفر.');
+      setRoomRatesError(err instanceof Error ? err.message : 'تعذر تحميل أسعار الغرف.');
     } finally {
-      setIsCreatingDemo(false);
-    }
-  };
-
-  // Quick helper to seed a demo service in Odoo
-  const handleCreateDemoService = async () => {
-    setIsCreatingDemo(true);
-    setErrorMsg('');
-    try {
-      const serviceNames = {
-        package: 'باقة اكتشاف العراق وسامراء 4 أيام',
-        tour: 'جولة سياحية تاريخية في بغداد',
-        transfer: 'استقبال وتوديع مطار بغداد الدولي',
-        car: 'تأجير سيارة دفع رباعي مع سائق',
-      };
-      const name = serviceNames[serviceType] || 'خدمة سياحية تجريبية';
-
-      const newService = await catalogAdminApi.createService({
-        name,
-        service_type: serviceType,
-        city: 'بغداد',
-        price_usd: 150,
-        supplier_cost_usd: 100,
-      });
-
-      toast(`تم إنشاء ${name} على السيرفر برقم #${newService.id}`);
-      setServicesList(prev => [newService, ...prev]);
-      setServiceId(String(newService.id));
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'فشل إنشاء خدمة تجريبية على السيرفر.');
-    } finally {
-      setIsCreatingDemo(false);
+      setIsLoadingCatalog(false);
     }
   };
 
@@ -183,12 +152,15 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
       if (customerId && customerId.trim()) {
         const parsedCust = parseInt(customerId.trim(), 10);
         if (!isNaN(parsedCust) && parsedCust > 0) {
+          if (!usersList.some(user => String(user.id) === String(parsedCust))) {
+            throw new Error('اختر عميلاً موثقاً من القائمة أو اترك الحقل فارغاً.');
+          }
           payload.customer_id = parsedCust;
         }
       }
 
       if (serviceType === 'hotel') {
-        if (!hotelRateId) throw new Error('يرجى اختيار سعر الغرفة.');
+        if (!roomRates.some(rate => String(rate.id) === String(hotelRateId))) throw new Error('اختر سعر غرفة موجوداً من القائمة أو أعد تحميل أسعار الغرف.');
         if (!checkin || !checkout) throw new Error('يرجى تحديد تاريخ الوصول والمغادرة.');
         if (checkin >= checkout) throw new Error('تاريخ المغادرة يجب أن يكون بعد تاريخ الوصول.');
         
@@ -198,6 +170,9 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
       } else {
         if (!serviceId) throw new Error('يرجى اختيار الخدمة المطلوبة.');
         if (!departureAt) throw new Error('يرجى تحديد موعد الانطلاق.');
+        if (returnAt && returnAt <= departureAt) {
+          throw new Error('موعد العودة يجب أن يكون بعد موعد الانطلاق.');
+        }
 
         payload.service_id = parseInt(serviceId, 10);
         payload.departure_at = departureAt;
@@ -213,7 +188,7 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
       const createdRecord = await bookingsApi.createBooking(payload);
 
       toast(`تم إنشاء الحجز على السيرفر بنجاح برقم ${createdRecord.reference || createdRecord.id}.`);
-      window.dispatchEvent(new CustomEvent('yar:bookings-updated'));
+      window.dispatchEvent(new CustomEvent('yar:bookings-updated', { detail: createdRecord }));
       (onSuccess || onCreated)?.(createdRecord);
       onClose();
     } catch (err) {
@@ -224,8 +199,8 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
     }
   };
 
-  const matchingServices = servicesList.filter(s => s.service_type === serviceType);
-  const matchingOptions = optionsList.filter(o => String(o.service_id) === String(serviceId));
+  const matchingServices = servicesList.filter(s => s.service_type === serviceType && s.active !== false && s.published !== false);
+  const matchingOptions = optionsList.filter(o => String(o.service_id) === String(serviceId) && o.active !== false && o.published !== false);
 
   const serviceTypeLabels = {
     package: 'باقة سفر متكاملة',
@@ -252,6 +227,7 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
             <strong>خطأ: </strong> {errorMsg}
           </div>
         )}
+        {catalogLoadError && <div className="ops-form-error wide" role="alert" style={{ marginBottom: 16 }}>{catalogLoadError}</div>}
 
         <form className="ops-form-grid" onSubmit={handleSubmit}>
           {/* Service Type */}
@@ -278,14 +254,11 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
               onChange={e => setCustomerId(e.target.value)}
             >
               <option value="">حجز مباشر باسم الإدارة (افتراضي)</option>
-              {usersList.map(u => {
-                const roleLabel = u.role === 'admin' ? 'مدير' : u.role === 'employee' ? 'موظف' : 'عميل';
-                return (
-                  <option key={u.id} value={u.id}>
-                    {u.name} {u.phone ? `(${u.phone})` : ''} · {roleLabel}
-                  </option>
-                );
-              })}
+              {usersList.map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
             </select>
             <small style={{ color: 'var(--muted)', fontSize: 11, marginTop: 4 }}>
               يمكنك اختيار حساب عميل مسجل، أو تركه باسم الإدارة.
@@ -298,17 +271,6 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
               <div className="ops-field wide" style={{ marginBottom: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                   <span style={{ fontWeight: 600 }}>سعر الغرفة *</span>
-                  {roomRates.length === 0 && (
-                    <button
-                      type="button"
-                      className="button secondary"
-                      onClick={handleCreateDemoHotel}
-                      disabled={isCreatingDemo}
-                      style={{ padding: '4px 8px', fontSize: 11 }}
-                    >
-                      {isCreatingDemo ? 'جاري الإضافة...' : '+ إضافة فندق تجريبي'}
-                    </button>
-                  )}
                 </div>
 
                 {roomRates.length > 0 ? (
@@ -326,17 +288,12 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
                   </select>
                 ) : (
                   <div>
-                    <input
-                      type="number"
-                      min="1"
-                      value={hotelRateId}
-                      onChange={e => setHotelRateId(e.target.value)}
-                      placeholder="أدخل معرّف سعر الغرفة أو اضغط الزر للإضافة"
-                      required
-                    />
                     <small style={{ color: 'var(--c-ef4444)', fontSize: 11, marginTop: 4, display: 'block' }}>
-                      لا توجد غرف مسجلة حالياً. اضغط على الزر أعلاه لإضافة غرفة تجريبية بنقرة واحدة.
+                      {roomRatesError || 'لا توجد أسعار غرف محمّلة. يجب اختيار سعر غرفة موجود على الخادم؛ لا يمكن إدخال رقم يدوي.'}
                     </small>
+                    {roomRatesError && <button type="button" className="quiet-button" onClick={handleReloadRoomRates} disabled={isLoadingCatalog}>
+                      {isLoadingCatalog ? 'جاري إعادة التحميل...' : 'إعادة تحميل أسعار الغرف'}
+                    </button>}
                   </div>
                 )}
               </div>
@@ -367,17 +324,6 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
               <div className="ops-field wide" style={{ marginBottom: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                   <span style={{ fontWeight: 600 }}>الخدمة المطلوبة *</span>
-                  {matchingServices.length === 0 && (
-                    <button
-                      type="button"
-                      className="button secondary"
-                      onClick={handleCreateDemoService}
-                      disabled={isCreatingDemo}
-                      style={{ padding: '4px 8px', fontSize: 11 }}
-                    >
-                      {isCreatingDemo ? 'جاري الإضافة...' : `+ إضافة ${serviceTypeLabels[serviceType]} تجريبية`}
-                    </button>
-                  )}
                 </div>
 
                 {matchingServices.length > 0 ? (
@@ -395,16 +341,8 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
                   </select>
                 ) : (
                   <div>
-                    <input
-                      type="number"
-                      min="1"
-                      value={serviceId}
-                      onChange={e => setServiceId(e.target.value)}
-                      placeholder="أدخل معرّف الخدمة أو اضغط الزر للإضافة"
-                      required
-                    />
                     <small style={{ color: 'var(--c-ef4444)', fontSize: 11, marginTop: 4, display: 'block' }}>
-                      لا توجد خدمات من نوع «{serviceTypeLabels[serviceType]}» مسجلة حالياً. اضغط الزر أعلاه لإضافتها فوراً.
+                      لا توجد خدمة نشطة من نوع «{serviceTypeLabels[serviceType]}» في الخادم. أضف الخدمة من إدارة الخدمات ثم أعد المحاولة.
                     </small>
                   </div>
                 )}
@@ -426,13 +364,7 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
                     ))}
                   </select>
                 ) : (
-                  <input
-                    type="number"
-                    min="1"
-                    value={serviceOptionId}
-                    onChange={e => setServiceOptionId(e.target.value)}
-                    placeholder="اختياري: أدخل رقم الخيار أو اتركه فارغاً"
-                  />
+                  <span className="ops-note">لا توجد خيارات نشطة لهذه الخدمة.</span>
                 )}
               </label>
 
@@ -451,6 +383,7 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
                 <input
                   type="datetime-local"
                   value={returnAt}
+                  min={departureAt || undefined}
                   onChange={e => setReturnAt(e.target.value)}
                 />
               </label>
@@ -499,7 +432,7 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
               type="button"
               className="button secondary"
               onClick={onClose}
-              disabled={isSubmitting}
+              disabled={isSubmitting || Boolean(catalogLoadError)}
             >
               إلغاء
             </button>

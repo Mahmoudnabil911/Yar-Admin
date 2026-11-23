@@ -2,12 +2,11 @@ import { uiLocale } from '../../i18n/prefs';
 import OverviewWidget from '../../inbox/OverviewWidget';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Icon } from '../../components/ui/Icon';
-import { operationsStorage } from '../../services/storage/operationsStorage';
 import { catalogStorage } from '../../services/storage/catalogStorage';
-import { operationsModel as M, mockData } from '../../services/models';
+import { operationsModel as M } from '../../services/models';
 import { can } from '../../auth/access';
 import { useSession } from '../../auth/useSession';
-import { reportsApi } from '../../services/api/reportsApi';
+import { bookingsApi } from '../../services/api/bookingsApi';
 
 export function OverviewPage({ onNavigate, onOpenBooking, searchQuery = '' }) {
   const session = useSession();
@@ -29,23 +28,24 @@ export function OverviewPage({ onNavigate, onOpenBooking, searchQuery = '' }) {
   const addBtnRef = useRef(null);
 
   // Subscribe to storage updates
-  const [bookings, setBookings] = useState(() => operationsStorage.getBookings());
+  const [bookings, setBookings] = useState([]);
   const [providers, setProviders] = useState(() => catalogStorage.getRecords('providers'));
-  const [liveSummary, setLiveSummary] = useState(null);
 
   useEffect(() => {
-    reportsApi.getDashboardSummary().then(setLiveSummary).catch(() => {});
+    let active = true;
+    const load = () => bookingsApi.listBookings({ limit: 100 }, true).then(result => {
+      if (active) setBookings((result.items || []).map(bookingsApi.mapRecordToRow));
+    }).catch(() => { if (active) setBookings([]); });
+    load();
+    window.addEventListener('yar:bookings-updated', load);
+    return () => { active = false; window.removeEventListener('yar:bookings-updated', load); };
   }, []);
 
   useEffect(() => {
-    const unsubOps = operationsStorage.subscribe(() => {
-      setBookings(operationsStorage.getBookings());
-    });
     const unsubCat = catalogStorage.subscribe(() => {
       setProviders(catalogStorage.getRecords('providers'));
     });
     return () => {
-      unsubOps();
       unsubCat();
     };
   }, []);
@@ -104,7 +104,7 @@ export function OverviewPage({ onNavigate, onOpenBooking, searchQuery = '' }) {
       if (statusFilter !== 'all' && b.status !== statusFilter) return false;
       // Payment filter
       if (paymentFilter !== 'all') {
-        const pStatus = b.payment || (M.paymentStatus(b) === 'paid' ? 'paid' : 'pending');
+        const pStatus = Number(b.due_iqd || 0) <= 0 && Number(b.total_iqd) > 0 ? 'paid' : 'pending';
         if (pStatus !== paymentFilter) return false;
       }
       // Search query
@@ -128,15 +128,13 @@ export function OverviewPage({ onNavigate, onOpenBooking, searchQuery = '' }) {
     // Financial revenue in IQD
     const iqdRows = nonCancelled.filter(b => b.currency === 'IQD' || !b.currency);
     const paidIqd = iqdRows.reduce((sum, b) => {
-      const bal = M.balances(b);
-      return sum + bal.collected;
+      return sum + Number(b.collected_iqd || 0);
     }, 0);
 
     const pendingRows = iqdRows.filter(b => {
-      const bal = M.balances(b);
-      return bal.balance > 0;
+      return Number(b.due_iqd || 0) > 0;
     });
-    const pendingAmount = pendingRows.reduce((sum, b) => sum + M.balances(b).balance, 0);
+    const pendingAmount = pendingRows.reduce((sum, b) => sum + Number(b.due_iqd || 0), 0);
 
     return {
       totalCount,
@@ -155,16 +153,15 @@ export function OverviewPage({ onNavigate, onOpenBooking, searchQuery = '' }) {
 
   // Weekly chart data
   const chartData = useMemo(() => {
-    return mockData?.weeklyTrend || [
-      { date: '2026-10-30', label: 'الجمعة', revenue: 1120000, bookings: 7 },
-      { date: '2026-10-31', label: 'السبت', revenue: 1680000, bookings: 10 },
-      { date: '2026-11-01', label: 'الأحد', revenue: 1320000, bookings: 8 },
-      { date: '2026-11-02', label: 'الاثنين', revenue: 2010000, bookings: 12 },
-      { date: '2026-11-03', label: 'الثلاثاء', revenue: 1840000, bookings: 11 },
-      { date: '2026-11-04', label: 'الأربعاء', revenue: 2360000, bookings: 14 },
-      { date: todayStr, label: 'الخميس', revenue: metrics.revenue, bookings: metrics.totalCount }
-    ];
-  }, [todayStr, metrics.revenue, metrics.totalCount]);
+    const days = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - index));
+      const key = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Baghdad', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+      const rows = bookings.filter(booking => booking.date === key);
+      return { date: key, label: new Intl.DateTimeFormat(uiLocale(), { timeZone: 'Asia/Baghdad', weekday: 'short' }).format(date), bookings: rows.length, revenue: rows.reduce((sum, booking) => sum + Number(booking.collected_iqd || 0), 0) };
+    });
+    return days;
+  }, [bookings]);
 
   const chartMax = useMemo(() => {
     const key = chartMode === 'bookings' ? 'bookings' : 'revenue';
@@ -187,7 +184,7 @@ export function OverviewPage({ onNavigate, onOpenBooking, searchQuery = '' }) {
         b.route,
         b.amount,
         b.currency || 'IQD',
-        M.paymentStatus(b) === 'paid' ? 'مدفوع' : 'غير مدفوع',
+        Number(b.due_iqd || 0) <= 0 && Number(b.total_iqd) > 0 ? 'مدفوع' : 'غير مدفوع',
         M.statuses[b.status] || b.status,
         b.date
       ])
@@ -406,7 +403,7 @@ export function OverviewPage({ onNavigate, onOpenBooking, searchQuery = '' }) {
         </button>
       </section>
 
-      {isAdmin && <ManagementKpis bookings={bookings} liveSummary={liveSummary} />}
+      {isAdmin && <ManagementKpis bookings={bookings} />}
 
       <div className="workspace-grid">
         <section className="panel bookings-panel" aria-labelledby="bookings-title">
@@ -548,10 +545,10 @@ export function OverviewPage({ onNavigate, onOpenBooking, searchQuery = '' }) {
                 <tbody id="booking-rows">
                   {pageRows.map(b => {
                     const initials = b.initials || b.customer.slice(0, 2);
-                    const pStatus = b.payment || (M.paymentStatus(b) === 'paid' ? 'paid' : 'pending');
+                    const pStatus = Number(b.due_iqd || 0) <= 0 && Number(b.total_iqd) > 0 ? 'paid' : 'pending';
                     const paymentLabel = { paid: 'مدفوع', pending: 'بانتظار الدفع', review: 'قيد المراجعة' }[pStatus] || pStatus;
                     const statusClass = b.status;
-                    const statusLabel = M.statuses[b.status] || b.status;
+                    const statusLabel = ({ confirmed: 'مؤكد', ...M.statuses })[b.status] || b.status;
                     const serviceIcon = { flight: 'plane', hotel: 'hotel', package: 'bag', transfer: 'car', tour: 'map' }[b.service] || 'ticket';
 
                     return (
@@ -780,23 +777,19 @@ export default OverviewPage;
 
 
 /** Admin-only profitability & internal cost (from saved price snapshots; currencies never summed). */
-function ManagementKpis({ bookings, liveSummary }) {
+function ManagementKpis({ bookings }) {
   const totals = useMemo(() => {
     const out = {};
     for (const b of bookings) {
-      if (b.status === 'cancelled' || !b.pricing) continue;
-      const c = b.currency || 'IQD';
-      out[c] = out[c] || { margin: 0, cost: 0, count: 0 };
-      out[c].margin += Number(b.pricing.margin) || 0;
-      out[c].cost += Number(b.pricing.cost) || 0;
-      out[c].count += 1;
-    }
-    if (liveSummary && liveSummary.supplier_cost_total_usd > 0) {
-      out['USD'] = out['USD'] || { margin: 0, cost: 0, count: 0 };
-      out['USD'].cost = liveSummary.supplier_cost_total_usd;
+      if (b.status === 'cancelled' || b.supplier_cost_usd == null || b.fx_rate_snapshot == null) continue;
+      out.IQD = out.IQD || { margin: 0, cost: 0, count: 0 };
+      const costIqd = Number(b.supplier_cost_usd) * Number(b.fx_rate_snapshot);
+      out.IQD.margin += Number(b.total_iqd || 0) - costIqd;
+      out.IQD.cost += costIqd;
+      out.IQD.count += 1;
     }
     return out;
-  }, [bookings, liveSummary]);
+  }, [bookings]);
   const fmt = (v, c) => `${new Intl.NumberFormat('en-US', { maximumFractionDigits: c === 'USD' ? 2 : 0, minimumFractionDigits: c === 'USD' ? 2 : 0 }).format(v)} ${c === 'USD' ? '$' : 'د.ع'}`;
   const currencies = Object.keys(totals).sort();
   return (

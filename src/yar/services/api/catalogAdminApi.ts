@@ -392,7 +392,12 @@ export const catalogAdminApi = {
   async createService(payload: {
     name: string;
     service_type: 'package' | 'tour' | 'transfer' | 'car';
+    description?: string;
     city?: string;
+    pickup_location?: string;
+    dropoff_location?: string;
+    duration_minutes?: number;
+    capacity?: number;
     price_usd: number;
     supplier_cost_usd?: number;
   }): Promise<AdminServiceItem> {

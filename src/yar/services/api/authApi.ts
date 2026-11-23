@@ -224,10 +224,29 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}): Pro
     return h;
   };
 
-  let res = await fetch(url, {
+  const method = (options.method || 'GET').toUpperCase();
+  const canRetryRead = (method === 'GET' || method === 'HEAD') && !options.body;
+  const send = (authToken: string | null) => fetch(url, {
     ...options,
-    headers: buildHeaders(token),
+    headers: buildHeaders(authToken),
   });
+  let res: Response;
+  let retriedRead = false;
+  try {
+    res = await send(token);
+  } catch (err) {
+    if (!canRetryRead) throw err;
+    retriedRead = true;
+    await new Promise(resolve => setTimeout(resolve, 700));
+    res = await send(token);
+  }
+
+  // The local Vite proxy can receive a transient upstream socket hang-up.
+  // Retry only idempotent reads; never replay booking writes or other mutations.
+  if (canRetryRead && !retriedRead && (res.status === 502 || res.status === 504)) {
+    await new Promise(resolve => setTimeout(resolve, 700));
+    res = await send(token);
+  }
 
   // If 401 Unauthorized, attempt rotation and retry once
   if (res.status === 401 && getRefreshToken()) {

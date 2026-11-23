@@ -183,7 +183,7 @@ export function HotelsPage({
       setRooms(roomsRes.items || []);
       setRoomRates(ratesRes.items || []);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'تعذر تحميل بيانات الفنادق من الخادم.';
+      const msg = err instanceof Error ? err.message : 'تعذر تحميل بيانات الفنادق.';
       setErrorMsg(msg);
     } finally {
       setIsLoading(false);

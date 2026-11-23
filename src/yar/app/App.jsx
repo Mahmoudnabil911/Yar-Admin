@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspens
 import { useSearchParams, useLocation } from '../lib/router';
 import Layout from '../components/layout/Layout';
 import { Drawer } from '../components/ui/Drawer';
-import { operationsStorage } from '../services/storage/operationsStorage';
+import { bookingsApi } from '../services/api/bookingsApi';
 import { auth, canSeePage, ALL_PAGES } from '../auth/access';
 import { useSession } from '../auth/useSession';
 import LoginScreen from '../auth/LoginScreen';
@@ -95,8 +95,6 @@ function Dashboard({ session }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
 
-  const [opsTick, setOpsTick] = useState(0);
-  useEffect(() => operationsStorage.subscribe(() => setOpsTick(t => t + 1)), []);
 
   const requestedPage = resolvePage(searchParams.get('page'), location.pathname);
   const knownPage = ALL_PAGES.includes(requestedPage) || requestedPage === 'profile';
@@ -167,9 +165,21 @@ function Dashboard({ session }) {
     handleNavigate(page, edit, extra);
   }, [handleNavigate]);
 
-  const bookings = useMemo(() => operationsStorage.getBookings(), [opsTick]);
-  const awaitingBookings = useMemo(() => bookings.filter(b => b.status === 'awaiting'), [bookings]);
-  const activeBooking = activeBookingId ? bookings.find(b => b.id === activeBookingId) : null;
+  const [serverBookings, setServerBookings] = useState([]);
+  useEffect(() => {
+    let active = true;
+    const load = () => bookingsApi.listBookings({ limit: 100 })
+      .then(result => { if (active) setServerBookings((result.items || []).map(bookingsApi.mapRecordToRow)); })
+      .catch(() => { if (active) setServerBookings([]); });
+    const onUpdate = () => load();
+    const onLoaded = event => { if (active && Array.isArray(event.detail)) setServerBookings(event.detail); };
+    load();
+    window.addEventListener('yar:bookings-updated', onUpdate);
+    window.addEventListener('yar:bookings-loaded', onLoaded);
+    return () => { active = false; window.removeEventListener('yar:bookings-updated', onUpdate); window.removeEventListener('yar:bookings-loaded', onLoaded); };
+  }, []);
+  const awaitingBookings = useMemo(() => serverBookings.filter(b => b.status === 'awaiting'), [serverBookings]);
+  const activeBooking = activeBookingId ? serverBookings.find(b => String(b.id) === String(activeBookingId) || String(b.rawId) === String(activeBookingId)) : null;
 
   const closeMenu = useCallback(() => setIsMobileMenuOpen(false), []);
 
@@ -183,7 +193,7 @@ function Dashboard({ session }) {
       case 'profile': return <Profile />;
       case 'inbox': return <InboxPage onNavigate={handleNavigate} externalQuery={globalQuery} />;
       case 'bookings':
-        return <BookingsPage onOpenBooking={handleOpenBooking} onCreateBooking={() => setCreateBookingOpen(true)} externalQuery={globalQuery} />;
+        return <BookingsPage onOpenBooking={handleOpenBooking} onCreateBooking={() => setCreateBookingOpen(true)} searchQuery={globalQuery} onSearchChange={setGlobalQuery} />;
       case 'hotels': return <HotelsPage {...catalogProps} />;
       case 'packages': return <PackagesPage {...catalogProps} />;
       case 'cars': return <CarsPage {...catalogProps} />;
@@ -191,7 +201,7 @@ function Dashboard({ session }) {
       case 'providers': return <ProvidersPage {...catalogProps} />;
       case 'provider-ops': return <ProviderOpsPage externalQuery={globalQuery} />;
       case 'supplier-credit': return <SupplierCreditPage onOpenBooking={id => { handleNavigate('bookings'); handleOpenBooking(id); }} />;
-      case 'reports': return <ReportsPage onOpenBooking={handleOpenBooking} onNavigate={handleNavigate} />;
+      case 'reports': return <ReportsPage searchQuery={globalQuery} onSearchChange={setGlobalQuery} onNavigate={handleNavigate} />;
       case 'pricing': return <PricingPage />;
       case 'audience': return <AudiencePage onOpenBooking={handleOpenBooking} />;
       case 'content': return <ContentPage />;
@@ -223,22 +233,22 @@ function Dashboard({ session }) {
 
       {/* Booking detail drawer: switches between details and payment/finance views */}
       <Drawer
-        isOpen={Boolean(activeBooking)}
+        isOpen={Boolean(activeBookingId)}
         onClose={handleCloseBooking}
         eyebrow={financeOpen ? 'تفاصيل الدفع' : 'تفاصيل الحجز'}
-        title={activeBooking ? activeBooking.id : ''}
+        title={activeBooking ? activeBooking.id : String(activeBookingId || '')}
       >
-        {activeBooking && (financeOpen ? (
+        {activeBookingId && (financeOpen ? (
           <PaymentDetailsModal
-            key={`fin-${activeBooking.id}`}
-            bookingId={activeBooking.id}
+            key={`fin-${activeBookingId}`}
+            bookingId={activeBooking?.rawId || activeBookingId}
             onBackToBooking={() => setFinanceOpen(false)}
             onNavigate={navFromDrawer}
           />
         ) : (
           <BookingDrawer
-            key={`bk-${activeBooking.id}`}
-            bookingId={activeBooking.id}
+            key={`bk-${activeBookingId}`}
+            bookingId={activeBooking?.rawId || activeBookingId}
             onOpenFinance={() => setFinanceOpen(true)}
             onNavigate={navFromDrawer}
           />
