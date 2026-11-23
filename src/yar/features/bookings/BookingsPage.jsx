@@ -10,13 +10,14 @@ export function BookingsPage({
   onCreateBooking,
   searchQuery = '',
   externalQuery,
-  onSearchChange
+  onSearchChange,
+  initialBookings = null
 }) {
   const toast = useToast();
   const handleCreate = onOpenCreate || onCreateBooking;
   const effectiveSearchQuery = searchQuery || externalQuery || '';
 
-  const [backendItems, setBackendItems] = useState(null);
+  const [backendItems, setBackendItems] = useState(() => (Array.isArray(initialBookings) && initialBookings.length > 0 ? initialBookings : null));
   const [loadError, setLoadError] = useState('');
   const providers = useMemo(() => [...new Map((backendItems || []).filter(r => r.supplier_id != null).map(r => [String(r.supplier_id), { id: r.supplier_id, name: r.provider || `#${r.supplier_id}` }])).values()], [backendItems]);
   const staffList = useMemo(() => [...new Map((backendItems || []).filter(r => r.assignedId != null && r.assignedId !== '').map(r => [String(r.assignedId), { id: r.assignedId, name: r.assigned || `#${r.assignedId}` }])).values()], [backendItems]);
@@ -34,7 +35,7 @@ export function BookingsPage({
 
   const [page, setPage] = useState(1);
   const pageSize = 10;
-  const [isSyncing, setIsSyncing] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(() => !(Array.isArray(initialBookings) && initialBookings.length > 0));
   const transientFailuresRef = useRef(0);
   const retryTimerRef = useRef(null);
 
@@ -52,7 +53,7 @@ export function BookingsPage({
         setLoadError('');
         return true;
       } else {
-        setBackendItems([]);
+        setBackendItems(prev => (prev && prev.length > 0 ? prev : []));
         setLoadError('استجابة الحجوزات غير مكتملة.');
         return false;
       }
@@ -84,7 +85,21 @@ export function BookingsPage({
   };
 
   useEffect(() => {
+    if (Array.isArray(initialBookings) && initialBookings.length > 0) {
+      setBackendItems(prev => (prev && prev.length > 0 ? prev : initialBookings));
+      setIsSyncing(false);
+    }
+  }, [initialBookings]);
+
+  useEffect(() => {
     loadBackendBookings();
+
+    const handleLoaded = event => {
+      if (Array.isArray(event?.detail) && event.detail.length > 0) {
+        setBackendItems(event.detail);
+        setIsSyncing(false);
+      }
+    };
 
     const handleUpdate = event => {
       transientFailuresRef.current = 0;
@@ -97,11 +112,14 @@ export function BookingsPage({
           return [createdRow, ...rows.filter(row => row.rawId !== createdRow.rawId && row.id !== createdRow.id)];
         });
       }
-      loadBackendBookings();
+      loadBackendBookings(true);
     };
+
+    window.addEventListener('yar:bookings-loaded', handleLoaded);
     window.addEventListener('yar:bookings-updated', handleUpdate);
 
     return () => {
+      window.removeEventListener('yar:bookings-loaded', handleLoaded);
       window.removeEventListener('yar:bookings-updated', handleUpdate);
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
     };
@@ -119,7 +137,7 @@ export function BookingsPage({
   // Filtered rows
   const filteredRows = useMemo(() => {
     try {
-      const query = effectiveSearchQuery.trim().toLocaleLowerCase();
+      const query = (effectiveSearchQuery || '').trim().toLocaleLowerCase();
       return activeBookings.filter(r => {
         const paid = r.due_iqd != null
           ? Number(r.due_iqd) <= 0
@@ -133,7 +151,7 @@ export function BookingsPage({
           && (filters.paymentStatus === 'all' || (filters.paymentStatus === 'paid') === paid)
           && (!filters.startDate || date >= filters.startDate)
           && (!filters.endDate || date <= filters.endDate)
-          && (!query || `${r.id} ${r.customer || ''} ${r.customer_phone || ''} ${r.reference || ''}`.toLocaleLowerCase().includes(query));
+          && (!query || `${r.id} ${r.customer || ''} ${r.phone || ''} ${r.customer_phone || ''} ${r.reference || ''}`.toLocaleLowerCase().includes(query));
       });
     } catch {
       return [];

@@ -35,7 +35,7 @@ export function OverviewPage({ onNavigate, onOpenBooking, searchQuery = '' }) {
     let active = true;
     const load = () =>
       bookingsApi
-        .listBookings({ limit: 100 }, true)
+        .listBookings({ limit: 100 })
         .then((result) => {
           if (active) setBookings((result.items || []).map(bookingsApi.mapRecordToRow));
         })

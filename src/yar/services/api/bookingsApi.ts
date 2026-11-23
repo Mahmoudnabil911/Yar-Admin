@@ -195,7 +195,7 @@ export const bookingsApi = {
 
     if (!force) {
       const cached = bookingsCache.get(cacheKey);
-      if (cached && Date.now() - cached.time < 10000) {
+      if (cached && Date.now() - cached.time < 30000) {
         return cached.data;
       }
       const inFlight = inFlightRequests.get(cacheKey);

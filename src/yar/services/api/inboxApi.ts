@@ -136,6 +136,10 @@ async function handleInboxResponse<T>(res: Response, fallback = 'Operation faile
   return envelope.data as T;
 }
 
+let cachedNotifications: { items: NotificationItem[] } | null = null;
+let lastNotificationsTime = 0;
+let notificationsPromise: Promise<{ items: NotificationItem[] }> | null = null;
+
 export const inboxApi = {
   /**
    * API 120 | List inbox inquiries | قائمة رسائل الدعم
@@ -200,12 +204,26 @@ export const inboxApi = {
    * GET /api/v1/notifications
    * Access: Admin (JWT) + Booking Employee (JWT) + Customer (JWT)
    */
-  async getNotifications(): Promise<{ items: NotificationItem[] }> {
+  async getNotifications(force = false): Promise<{ items: NotificationItem[] }> {
+    if (!force && cachedNotifications && Date.now() - lastNotificationsTime < 30000) {
+      return cachedNotifications;
+    }
+    if (!force && notificationsPromise) {
+      return notificationsPromise;
+    }
     const baseUrl = getApiBaseUrl();
-    const res = await fetchWithAuth(`${baseUrl}/api/v1/notifications`, {
-      method: 'GET',
+    notificationsPromise = (async () => {
+      const res = await fetchWithAuth(`${baseUrl}/api/v1/notifications`, {
+        method: 'GET',
+      });
+      const data = await handleInboxResponse<{ items: NotificationItem[] }>(res, 'تعذر جلب إشعارات الحساب من الخادم.');
+      cachedNotifications = data;
+      lastNotificationsTime = Date.now();
+      return data;
+    })().finally(() => {
+      notificationsPromise = null;
     });
-    return await handleInboxResponse<{ items: NotificationItem[] }>(res, 'تعذر جلب إشعارات الحساب من الخادم.');
+    return notificationsPromise;
   },
 
   /**
@@ -218,6 +236,8 @@ export const inboxApi = {
     const res = await fetchWithAuth(`${baseUrl}/api/v1/notifications/${encodeURIComponent(notificationId)}/read`, {
       method: 'POST',
     });
+    cachedNotifications = null;
+    lastNotificationsTime = 0;
     return await handleInboxResponse<{ read: boolean }>(res, 'تعذر تعيين الإشعار كمقروء.');
   },
 

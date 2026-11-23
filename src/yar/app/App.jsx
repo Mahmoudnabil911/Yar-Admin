@@ -120,6 +120,7 @@ function Dashboard({ session }) {
       if (extra) for (const [k, v] of Object.entries(extra)) next.set(k, v);
       return next;
     });
+    setGlobalQuery('');
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [setSearchParams]);
 
@@ -168,16 +169,22 @@ function Dashboard({ session }) {
   const [serverBookings, setServerBookings] = useState([]);
   useEffect(() => {
     let active = true;
-    const load = () => bookingsApi.listBookings({ limit: 100 })
-      .then(result => { if (active) setServerBookings((result.items || []).map(bookingsApi.mapRecordToRow)); })
-      .catch(() => { if (active) setServerBookings([]); });
-    const onUpdate = () => load();
+    const shouldLoad = currentPage === 'bookings' || currentPage === 'overview';
+    const load = () => {
+      if (!shouldLoad) return;
+      bookingsApi.listBookings({ limit: 100 })
+        .then(result => { if (active) setServerBookings((result.items || []).map(bookingsApi.mapRecordToRow)); })
+        .catch(() => { if (active) setServerBookings([]); });
+    };
+    const onUpdate = () => {
+      if (shouldLoad) load();
+    };
     const onLoaded = event => { if (active && Array.isArray(event.detail)) setServerBookings(event.detail); };
-    load();
+    if (shouldLoad) load();
     window.addEventListener('yar:bookings-updated', onUpdate);
     window.addEventListener('yar:bookings-loaded', onLoaded);
     return () => { active = false; window.removeEventListener('yar:bookings-updated', onUpdate); window.removeEventListener('yar:bookings-loaded', onLoaded); };
-  }, []);
+  }, [currentPage]);
   const awaitingBookings = useMemo(() => serverBookings.filter(b => b.status === 'awaiting'), [serverBookings]);
   const activeBooking = activeBookingId ? serverBookings.find(b => String(b.id) === String(activeBookingId) || String(b.rawId) === String(activeBookingId)) : null;
 
@@ -193,7 +200,15 @@ function Dashboard({ session }) {
       case 'profile': return <Profile />;
       case 'inbox': return <InboxPage onNavigate={handleNavigate} externalQuery={globalQuery} />;
       case 'bookings':
-        return <BookingsPage onOpenBooking={handleOpenBooking} onCreateBooking={() => setCreateBookingOpen(true)} searchQuery={globalQuery} onSearchChange={setGlobalQuery} />;
+        return (
+          <BookingsPage
+            onOpenBooking={handleOpenBooking}
+            onCreateBooking={() => setCreateBookingOpen(true)}
+            searchQuery={globalQuery}
+            onSearchChange={setGlobalQuery}
+            initialBookings={serverBookings}
+          />
+        );
       case 'hotels': return <HotelsPage {...catalogProps} />;
       case 'packages': return <PackagesPage {...catalogProps} />;
       case 'cars': return <CarsPage {...catalogProps} />;

@@ -66,17 +66,35 @@ async function handleFxResponse<T>(res: Response): Promise<T> {
   return json.data as T;
 }
 
+let cachedRates: FxRatesData | null = null;
+let lastRatesTime = 0;
+let ratesPromise: Promise<FxRatesData> | null = null;
+
 export const fxApi = {
   /**
    * API 111 | Read historical daily FX rates | سجل أسعار الصرف اليومية
    * GET /api/v1/admin/fx
    */
-  async getRates(): Promise<FxRatesData> {
+  async getRates(force = false): Promise<FxRatesData> {
+    if (!force && cachedRates && Date.now() - lastRatesTime < 60000) {
+      return cachedRates;
+    }
+    if (!force && ratesPromise) {
+      return ratesPromise;
+    }
     const baseUrl = getApiBaseUrl();
-    const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/fx`, {
-      method: 'GET',
+    ratesPromise = (async () => {
+      const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/fx`, {
+        method: 'GET',
+      });
+      const data = await handleFxResponse<FxRatesData>(res);
+      cachedRates = data;
+      lastRatesTime = Date.now();
+      return data;
+    })().finally(() => {
+      ratesPromise = null;
     });
-    return await handleFxResponse<FxRatesData>(res);
+    return ratesPromise;
   },
 
   /**
@@ -89,6 +107,8 @@ export const fxApi = {
       method: 'POST',
       body: JSON.stringify({ rate_iqd_per_usd }),
     });
+    cachedRates = null;
+    lastRatesTime = 0;
     return await handleFxResponse<SetFxRateData>(res);
   },
 };

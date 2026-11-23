@@ -12,7 +12,6 @@ export function ReportsPage({ searchQuery = '', onSearchChange }) {
   const toast = useToast();
   const [rows, setRows] = useState([]);
   const [serverReport, setServerReport] = useState(null);
-  const [overviewSummary, setOverviewSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filters, setFilters] = useState({
@@ -27,10 +26,9 @@ export function ReportsPage({ searchQuery = '', onSearchChange }) {
     setLoading(true);
     setError('');
     try {
-      const [bookingsRes, reportRes, overviewRes] = await Promise.allSettled([
-        bookingsApi.listBookings({ limit: 100 }, true),
-        reportsApi.getBookingsReport(true),
-        reportsApi.getDashboardSummary(true),
+      const [bookingsRes, reportRes] = await Promise.allSettled([
+        bookingsApi.listBookings({ limit: 100 }),
+        reportsApi.getBookingsReport(),
       ]);
 
       if (bookingsRes.status === 'fulfilled' && bookingsRes.value?.items) {
@@ -42,10 +40,6 @@ export function ReportsPage({ searchQuery = '', onSearchChange }) {
 
       if (reportRes.status === 'fulfilled' && reportRes.value) {
         setServerReport(reportRes.value);
-      }
-
-      if (overviewRes.status === 'fulfilled' && overviewRes.value) {
-        setOverviewSummary(overviewRes.value);
       }
 
       if (bookingsRes.status === 'rejected' && reportRes.status === 'rejected') {
