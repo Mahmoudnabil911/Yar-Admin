@@ -285,7 +285,7 @@ export function OverviewPage({ onNavigate, onOpenBooking, searchQuery = '' }) {
           <p>كل ما تحتاجه لإدارة رحلات اليوم، في مكان واحد.</p>
         </div>
         <div className="heading-actions">
-          <div style={{ position: 'relative' }} ref={periodBtnRef}>
+          <div className="pop-anchor" style={{ position: 'relative' }} ref={periodBtnRef}>
             <button
               type="button"
               className="button secondary period-button"
@@ -350,7 +350,7 @@ export function OverviewPage({ onNavigate, onOpenBooking, searchQuery = '' }) {
           </div>
 
           {canManageCatalog && (
-            <div style={{ position: 'relative' }} ref={addBtnRef}>
+            <div className="pop-anchor" style={{ position: 'relative' }} ref={addBtnRef}>
               <button
                 type="button"
                 className="button primary"
