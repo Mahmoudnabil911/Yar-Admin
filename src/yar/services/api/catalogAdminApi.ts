@@ -75,8 +75,27 @@ export interface AdminServiceItem {
   city?: string;
   price_usd?: number;
   supplier_cost_usd?: number;
+  supplier_id?: number | false;
+  capacity?: number;
+  car_model?: string | false;
+  luggage_capacity?: number;
+  fleet_units?: number;
+  media?: string[];
+  attributes?: Record<string, unknown> | false;
   active?: boolean;
   published?: boolean;
+  [key: string]: unknown;
+}
+
+export interface AdminCarCityRateItem {
+  id: number;
+  service_id: number;
+  city: string;
+  pickup_price_usd: number;
+  roundtrip_price_usd: number;
+  pickup_supplier_cost_usd?: number;
+  roundtrip_supplier_cost_usd?: number;
+  active?: boolean;
   [key: string]: unknown;
 }
 
@@ -398,9 +417,14 @@ export const catalogAdminApi = {
     dropoff_location?: string;
     duration_minutes?: number;
     capacity?: number;
+    car_model?: string;
+    luggage_capacity?: number;
+    fleet_units?: number;
     price_usd: number;
     supplier_cost_usd?: number;
     supplier_id?: number;
+    media?: string[];
+    attributes?: Record<string, unknown>;
     published?: boolean;
     active?: boolean;
   }): Promise<AdminServiceItem> {
@@ -430,6 +454,87 @@ export const catalogAdminApi = {
       body: JSON.stringify(payload),
     });
     return await handleResponse<{ id: number }>(res, 'فشل تعديل بيانات الخدمة على الخادم.');
+  },
+
+  /**
+   * API 180 | رفع وإرفاق صورة أو فيديو للخدمة | POST /api/v1/admin/services/{record_id}/media
+   */
+  async uploadServiceMedia(recordId: number, file: File | Blob, name?: string): Promise<unknown> {
+    invalidateCatalogCache();
+    const baseUrl = getApiBaseUrl();
+    const form = new FormData();
+    form.append('file', file);
+    if (name) form.append('name', name);
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/services/${recordId}/media`, {
+      method: 'POST',
+      body: form,
+    });
+    return await handleResponse<unknown>(res, 'فشل رفع صورة الخدمة على الخادم.');
+  },
+
+  /**
+   * API 181 | عرض أسعار السيارات حسب المدينة | GET /api/v1/admin/car-city-rates
+   */
+  async getCarCityRates(
+    params?: { limit?: number; offset?: number },
+    force = false
+  ): Promise<{ items: AdminCarCityRateItem[] }> {
+    const query = new URLSearchParams();
+    if (params?.limit != null) query.set('limit', String(params.limit));
+    if (params?.offset != null) query.set('offset', String(params.offset));
+    const qs = query.toString();
+    const cacheKey = `car_city_rates:${qs}`;
+    return fetchCatalogWithDeduplication(cacheKey, async () => {
+      const baseUrl = getApiBaseUrl();
+      const url = `${baseUrl}/api/v1/admin/car-city-rates${qs ? `?${qs}` : ''}`;
+      const res = await fetchWithAuth(url, { method: 'GET' });
+      return await handleResponse<{ items: AdminCarCityRateItem[] }>(
+        res,
+        'فشل جلب أسعار السيارات حسب المدينة.'
+      );
+    }, 10000, force);
+  },
+
+  /**
+   * API 182 | إنشاء أسعار السيارات حسب المدينة | POST /api/v1/admin/car-city-rates
+   */
+  async createCarCityRate(payload: {
+    service_id: number;
+    city: string;
+    pickup_price_usd: number;
+    roundtrip_price_usd: number;
+    pickup_supplier_cost_usd: number;
+    roundtrip_supplier_cost_usd: number;
+    active?: boolean;
+  }): Promise<AdminCarCityRateItem> {
+    invalidateCatalogCache();
+    const baseUrl = getApiBaseUrl();
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/car-city-rates`, {
+      method: 'POST',
+      body: JSON.stringify({
+        active: true,
+        ...payload,
+      }),
+    });
+    const data = await handleResponse<{ id: number } | number>(res, 'فشل إضافة سعر المدينة للسيارة.');
+    const id = typeof data === 'object' && data !== null && 'id' in data ? data.id : (data as number);
+    return { active: true, ...payload, id };
+  },
+
+  /**
+   * API 183 | تعديل أسعار السيارات حسب المدينة | PATCH /api/v1/admin/car-city-rates/{record_id}
+   */
+  async updateCarCityRate(
+    recordId: number,
+    payload: Partial<AdminCarCityRateItem>
+  ): Promise<{ id: number }> {
+    invalidateCatalogCache();
+    const baseUrl = getApiBaseUrl();
+    const res = await fetchWithAuth(`${baseUrl}/api/v1/admin/car-city-rates/${recordId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse<{ id: number }>(res, 'فشل تعديل سعر المدينة للسيارة.');
   },
 
   /**

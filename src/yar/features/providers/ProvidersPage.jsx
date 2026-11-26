@@ -50,12 +50,14 @@ export function ProvidersPage({ onNavigate, searchQuery = '', onSearchChange }) 
 
   const filteredSuppliers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return suppliers.filter(s => {
+    return suppliers.filter((s) => {
       if (serviceFilter !== 'all' && s.service_type !== serviceFilter) return false;
       if (statusFilter === 'active' && s.active === false) return false;
       if (statusFilter === 'inactive' && s.active !== false) return false;
       if (q) {
-        const text = [s.name, s.code, s.email, s.phone, s.service_type, s.notes].join(' ').toLowerCase();
+        const text = [s.name, s.code, s.email, s.phone, s.service_type, s.notes]
+          .join(' ')
+          .toLowerCase();
         if (!text.includes(q)) return false;
       }
       return true;
@@ -69,8 +71,10 @@ export function ProvidersPage({ onNavigate, searchQuery = '', onSearchChange }) 
       <div className="page-heading catalog-heading">
         <div>
           <div className="eyebrow">إدارة الخدمات</div>
-          <h1 id="catalog-title" tabIndex={-1}>إدارة مزوّدي الخدمات</h1>
-          <p>عرض وإدارة مزوّدي الطيران والفنادق والنقل والباقات والجولات في النظام (API 067 / 068).</p>
+          <h1 id="catalog-title" tabIndex={-1}>
+            إدارة مزوّدي الخدمات
+          </h1>
+          <p>عرض وإدارة مزوّدي الطيران والفنادق والنقل والباقات والجولات في النظام.</p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <button
@@ -80,7 +84,9 @@ export function ProvidersPage({ onNavigate, searchQuery = '', onSearchChange }) 
             title="تحديث القائمة من الخادم"
             disabled={loading}
           >
-            <i data-icon="refresh"><Icon name="refresh" /></i>
+            <i data-icon="refresh">
+              <Icon name="refresh" />
+            </i>
             تحديث
           </button>
           {canEdit && (
@@ -90,27 +96,33 @@ export function ProvidersPage({ onNavigate, searchQuery = '', onSearchChange }) 
               data-catalog-add
               onClick={() => setShowAddModal(true)}
             >
-              <i data-icon="plus"><Icon name="plus" /></i>
+              <i data-icon="plus">
+                <Icon name="plus" />
+              </i>
               إضافة مزوّد خدمة
             </button>
           )}
         </div>
       </div>
 
-      {/* Live Badge */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <span className="ops-badge live" style={{ background: 'var(--c-eaf4e6, #eaf4e6)', color: 'var(--c-2b5a26, #2b5a26)', padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
-          • بيانات مباشرة من الخادم (API 067 / 068)
-        </span>
-        <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-          تُحفظ وتُدار بيانات المورّدين مباشرة على قاعدة بيانات الخادم.
-        </span>
-      </div>
-
       {error && (
-        <div className="ops-form-error wide" role="alert" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div
+          className="ops-form-error wide"
+          role="alert"
+          style={{
+            marginBottom: 16,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
           <span>{error}</span>
-          <button type="button" className="button secondary" style={{ minHeight: 28, fontSize: 12, padding: '2px 8px' }} onClick={loadSuppliers}>
+          <button
+            type="button"
+            className="button secondary"
+            style={{ minHeight: 28, fontSize: 12, padding: '2px 8px' }}
+            onClick={loadSuppliers}
+          >
             إعادة المحاولة
           </button>
         </div>
@@ -118,10 +130,20 @@ export function ProvidersPage({ onNavigate, searchQuery = '', onSearchChange }) 
 
       {/* Filters */}
       <section className="panel ops-card" style={{ marginBottom: 25 }}>
-        <div className="credit-filters" style={{ display: 'flex', gap: 14, padding: '16px 20px', background: 'var(--c-fafbf7)', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
+        <div
+          className="credit-filters"
+          style={{
+            display: 'flex',
+            gap: 14,
+            padding: '16px 20px',
+            background: 'var(--c-fafbf7)',
+            borderBottom: '1px solid var(--border)',
+            flexWrap: 'wrap',
+          }}
+        >
           <label className="ops-field" style={{ minWidth: 180 }}>
             <span>نوع الخدمة</span>
-            <select value={serviceFilter} onChange={e => setServiceFilter(e.target.value)}>
+            <select value={serviceFilter} onChange={(e) => setServiceFilter(e.target.value)}>
               <option value="all">كل الخدمات</option>
               <option value="flight">طيران</option>
               <option value="hotel">فنادق</option>
@@ -133,7 +155,7 @@ export function ProvidersPage({ onNavigate, searchQuery = '', onSearchChange }) 
 
           <label className="ops-field" style={{ minWidth: 160 }}>
             <span>الحالة</span>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="all">كل الحالات</option>
               <option value="active">مفعّل</option>
               <option value="inactive">معطّل</option>
@@ -163,7 +185,7 @@ export function ProvidersPage({ onNavigate, searchQuery = '', onSearchChange }) 
               </thead>
               <tbody>
                 {filteredSuppliers.length > 0 ? (
-                  filteredSuppliers.map(s => (
+                  filteredSuppliers.map((s) => (
                     <tr key={s.id}>
                       <td>
                         <strong>{s.name}</strong>
@@ -183,7 +205,11 @@ export function ProvidersPage({ onNavigate, searchQuery = '', onSearchChange }) 
                       </td>
                       <td>
                         {s.email && <div style={{ fontSize: 12 }}>{s.email}</div>}
-                        {s.phone && <div style={{ fontSize: 12, color: 'var(--muted)' }}><bdi>{s.phone}</bdi></div>}
+                        {s.phone && (
+                          <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                            <bdi>{s.phone}</bdi>
+                          </div>
+                        )}
                         {!s.email && !s.phone && <span style={{ color: 'var(--muted)' }}>—</span>}
                       </td>
                       <td>
@@ -195,7 +221,10 @@ export function ProvidersPage({ onNavigate, searchQuery = '', onSearchChange }) 
                         )}
                       </td>
                       <td>
-                        <span className={`ops-badge ${s.environment === 'production' ? 'success' : 'neutral'}`} style={{ fontSize: 11 }}>
+                        <span
+                          className={`ops-badge ${s.environment === 'production' ? 'success' : 'neutral'}`}
+                          style={{ fontSize: 11 }}
+                        >
                           {s.environment === 'production' ? 'إنتاج' : 'تجريبي'}
                         </span>
                       </td>
@@ -221,8 +250,13 @@ export function ProvidersPage({ onNavigate, searchQuery = '', onSearchChange }) 
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', padding: 35, color: 'var(--muted)' }}>
-                      <p style={{ fontWeight: 600, marginBottom: 4 }}>لا يوجد مزوّدو خدمة مسجلون مطابقون للبحث.</p>
+                    <td
+                      colSpan={8}
+                      style={{ textAlign: 'center', padding: 35, color: 'var(--muted)' }}
+                    >
+                      <p style={{ fontWeight: 600, marginBottom: 4 }}>
+                        لا يوجد مزوّدو خدمة مسجلون مطابقون للبحث.
+                      </p>
                       <small>No suppliers found matching current criteria.</small>
                     </td>
                   </tr>

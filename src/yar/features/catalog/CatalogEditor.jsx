@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Icon } from '../../components/ui/Icon';
 import { catalogTypes } from '../../services/models';
 import {
@@ -12,16 +12,26 @@ import PhotoDropzone,{imageSource} from './PhotoDropzone';
 import {minimumRoomPrice} from '../../services/hotelPricing';
 import {catalogFormData,addPhotoFiles} from '../../services/catalogForm';
 
-export function CatalogEditor({ catalogKey, recordId, onBack }) {
+export function CatalogEditor({
+  catalogKey,
+  recordId,
+  onBack,
+  externalRecord,
+  externalProviders,
+  onSaveRecord,
+  syncNote
+}) {
   const toast = useToast();
   const config = catalogTypes[catalogKey];
-  const allProviders = catalogStorage.getRecords('providers');
+  const [localProviders] = useState(() => catalogStorage.getRecords('providers'));
+  const allProviders = externalProviders !== undefined ? externalProviders : localProviders;
 
   const existingRecord = useMemo(() => {
+    if (externalRecord !== undefined) return externalRecord;
     if (!recordId || recordId === 'new') return null;
     const records = catalogStorage.getRecords(catalogKey);
     return records.find(r => r.id === recordId) || null;
-  }, [catalogKey, recordId]);
+  }, [catalogKey, recordId, externalRecord]);
 
   const [record, setRecord] = useState(() => {
     if (existingRecord) return JSON.parse(JSON.stringify(existingRecord));
@@ -30,6 +40,19 @@ export function CatalogEditor({ catalogKey, recordId, onBack }) {
 
   const [status, setStatus] = useState(() => existingRecord?.status || 'draft');
   const [errorMsg, setErrorMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (externalRecord !== undefined) {
+      if (externalRecord) {
+        setRecord(JSON.parse(JSON.stringify(externalRecord)));
+        setStatus(externalRecord.status || 'draft');
+      } else if (recordId === 'new') {
+        setRecord(catalogStorage.blankRecord(catalogKey));
+        setStatus('draft');
+      }
+    }
+  }, [externalRecord, recordId, catalogKey]);
 
   const isExisting = Boolean(existingRecord?.id);
 
@@ -99,7 +122,9 @@ export function CatalogEditor({ catalogKey, recordId, onBack }) {
 
   const handleSubmit = async e => {
     e.preventDefault();
+    if (isSubmitting) return;
     setErrorMsg('');
+    setIsSubmitting(true);
     try {
       const candidate = {
         ...record,
@@ -107,12 +132,19 @@ export function CatalogEditor({ catalogKey, recordId, onBack }) {
         updatedAt: new Date().toISOString()
       };
       const form = await addPhotoFiles(catalogFormData(candidate),candidate);
-      // The local adapter receives the multipart form contract; no network upload yet.
-      const saved = await catalogStorage.saveForm(catalogKey, candidate, form);
-      toast(`تم حفظ ${saved.name} في المعاينة المحلية.`);
+      if (onSaveRecord) {
+        const saved = await onSaveRecord(candidate, form);
+        toast(`تم حفظ ${saved?.name || candidate.name} بنجاح.`);
+      } else {
+        // The local adapter receives the multipart form contract; no network upload yet.
+        const saved = await catalogStorage.saveForm(catalogKey, candidate, form);
+        toast(`تم حفظ ${saved.name} في المعاينة المحلية.`);
+      }
       onBack();
     } catch (err) {
-      setErrorMsg(err.message);
+      setErrorMsg(err?.message || 'تعذر حفظ التغييرات.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -244,9 +276,9 @@ export function CatalogEditor({ catalogKey, recordId, onBack }) {
           <button type="button" className="button secondary" onClick={onBack}>
             إلغاء
           </button>
-          <button type="submit" form="catalog-form" className="button primary">
+          <button type="submit" form="catalog-form" className="button primary" disabled={isSubmitting}>
             <i><Icon name="check" /></i>
-            حفظ التغييرات
+            {isSubmitting ? 'جاري الحفظ…' : 'حفظ التغييرات'}
           </button>
         </div>
       </div>
@@ -396,7 +428,7 @@ export function CatalogEditor({ catalogKey, recordId, onBack }) {
             </p>
             <div className="editor-source">
               <span className="tiny-dot green"></span>
-              حفظ محلي · بيانات تجريبية
+              {syncNote || 'حفظ محلي · بيانات تجريبية'}
             </div>
           </section>
 

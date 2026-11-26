@@ -12,12 +12,18 @@ export function CatalogListView({
   onNavigate,
   onEdit,
   searchQuery = '',
-  onSearchChange
+  onSearchChange,
+  externalRecords,
+  externalProviders,
+  onArchiveRecord,
+  syncNote
 }) {
   const toast = useToast();
   const config = catalogTypes[catalogKey];
-  const allProviders = catalogStorage.getRecords('providers');
-  const [records, setRecords] = useState(() => catalogStorage.getRecords(catalogKey));
+  const [localProviders] = useState(() => catalogStorage.getRecords('providers'));
+  const allProviders = externalProviders !== undefined ? externalProviders : localProviders;
+  const [localRecords, setLocalRecords] = useState(() => catalogStorage.getRecords(catalogKey));
+  const records = externalRecords !== undefined ? externalRecords : localRecords;
   const [statusFilter, setStatusFilter] = useState('all');
   const [hotelFilters, setHotelFilters] = useState(emptyHotelFilters);
   const [page, setPage] = useState(1);
@@ -25,11 +31,12 @@ export function CatalogListView({
 
   // Subscribe to storage
   React.useEffect(() => {
+    if (externalRecords !== undefined) return undefined;
     const unsub = catalogStorage.subscribe(() => {
-      setRecords(catalogStorage.getRecords(catalogKey));
+      setLocalRecords(catalogStorage.getRecords(catalogKey));
     });
     return unsub;
-  }, [catalogKey]);
+  }, [catalogKey, externalRecords]);
 
   const numFormat = useMemo(() => new Intl.NumberFormat('en-US'), []);
   const num = val => numFormat.format(Number(val) || 0);
@@ -59,9 +66,11 @@ export function CatalogListView({
   const startIdx = (currentPageSafe - 1) * pageSize;
   const pageRows = filtered.slice(startIdx, startIdx + pageSize);
 
-  const handleArchive = (id, currentStatus, name) => {
+  const handleArchive = async (id, currentStatus, name) => {
     try {
-      const nextStatus = catalogStorage.archiveRecord(catalogKey, id);
+      const nextStatus = onArchiveRecord
+        ? await onArchiveRecord(id, currentStatus, name)
+        : catalogStorage.archiveRecord(catalogKey, id);
       toast(nextStatus === 'archived'
         ? 'نُقل السجل إلى الأرشيف. يمكن استعادته من تصفية «مؤرشف».'
         : 'استُعيد السجل كمسودة للمراجعة.');
@@ -196,7 +205,7 @@ export function CatalogListView({
           </label>
           <span className="local-preview-note">
             <span className="tiny-dot green"></span>
-            التعديلات محفوظة في هذا المتصفح فقط
+            {syncNote || 'التعديلات محفوظة في هذا المتصفح فقط'}
           </span>
         </div>
         {catalogKey === 'hotels' && <HotelFilters records={records} value={hotelFilters} onChange={v => { setHotelFilters(v); setPage(1); }} />}
