@@ -25,10 +25,13 @@ function mapServiceStatus(service) {
  */
 function mapTourRecord(service) {
   const attrs =
-    service.attributes && typeof service.attributes === 'object' ? service.attributes : {};
+    service.attributes && typeof service.attributes === 'object'
+      ? service.attributes
+      : {};
 
   // duration: server stores duration_minutes; local wants hours
-  const durationMinutes = service.duration_minutes != null ? Number(service.duration_minutes) : 0;
+  const durationMinutes =
+    service.duration_minutes != null ? Number(service.duration_minutes) : 0;
   const durationHours = durationMinutes > 0 ? durationMinutes / 60 : 4;
 
   // price_basis on the server is an enum ('legacy'|'per_person'|'per_group').
@@ -46,14 +49,21 @@ function mapTourRecord(service) {
     name: service.name || '',
     city: service.city || '',
     duration: durationHours,
-    itinerary: service.itinerary || String(attrs.itinerary || ''),
-    inclusions: service.inclusions || String(attrs.inclusions || ''),
-    exclusions: service.exclusions || String(attrs.exclusions || ''),
+    itinerary:
+      service.itinerary || String(attrs.itinerary || ''),
+    inclusions:
+      service.inclusions || String(attrs.inclusions || ''),
+    exclusions:
+      service.exclusions || String(attrs.exclusions || ''),
     photos: Array.isArray(service.media) ? service.media : [],
-    priceUSD: service.price_usd != null ? Number(service.price_usd) : 0,
+    priceUSD:
+      service.price_usd != null ? Number(service.price_usd) : 0,
     priceBasis: priceBasisText,
-    capacity: service.capacity != null ? Number(service.capacity) : 1,
-    serviceProvider: service.supplier_id ? String(service.supplier_id) : '',
+    capacity:
+      service.capacity != null ? Number(service.capacity) : 1,
+    serviceProvider: service.supplier_id
+      ? String(service.supplier_id)
+      : '',
     status: mapServiceStatus(service),
     // keep raw for update diff
     _rawMedia: Array.isArray(service.media) ? service.media : [],
@@ -103,18 +113,24 @@ export function ToursPage({
       suppliersApi.listAdminSuppliers().catch(() => ({ items: [] })),
     ]);
 
-    const allServices = Array.isArray(servicesRes?.items) ? servicesRes.items : [];
-    const tourServices = allServices.filter((s) => s.service_type === 'tour');
+    const allServices = Array.isArray(servicesRes?.items)
+      ? servicesRes.items
+      : [];
+    const tourServices = allServices.filter(
+      (s) => s.service_type === 'tour'
+    );
     setTours(tourServices.map((s) => mapTourRecord(s)));
 
-    const supplierItems = Array.isArray(suppliersRes?.items) ? suppliersRes.items : [];
+    const supplierItems = Array.isArray(suppliersRes?.items)
+      ? suppliersRes.items
+      : [];
     setProviders(
       supplierItems.map((sup) => ({
         id: String(sup.id),
         name: sup.name || `مورد #${sup.id}`,
         serviceType: 'tour',
         status: sup.active === false ? 'archived' : 'published',
-      })),
+      }))
     );
     setHasLoaded(true);
   }, []);
@@ -147,7 +163,7 @@ export function ToursPage({
       await fetchToursData(true);
       return restore ? 'draft' : 'archived';
     },
-    [fetchToursData],
+    [fetchToursData]
   );
 
   // -------------------------------------------------------------------------
@@ -167,17 +183,20 @@ export function ToursPage({
       const priceUsd = Number(candidate.priceUSD) || 0;
       const capacity = Number(candidate.capacity) || 1;
       const supplierId =
-        candidate.serviceProvider && String(candidate.serviceProvider).trim() !== ''
+        candidate.serviceProvider &&
+        String(candidate.serviceProvider).trim() !== ''
           ? parseInt(String(candidate.serviceProvider), 10)
           : undefined;
 
       // Separate existing server-hosted URLs from newly added local data: URLs
-      const candidatePhotos = Array.isArray(candidate.photos) ? candidate.photos : [];
+      const candidatePhotos = Array.isArray(candidate.photos)
+        ? candidate.photos
+        : [];
       const existingMedia = candidatePhotos.filter(
-        (p) => typeof p === 'string' && !p.startsWith('data:'),
+        (p) => typeof p === 'string' && !p.startsWith('data:')
       );
       const newDataPhotos = candidatePhotos.filter(
-        (p) => typeof p === 'string' && p.startsWith('data:'),
+        (p) => typeof p === 'string' && p.startsWith('data:')
       );
 
       // -----------------------------------------------------------------------
@@ -224,7 +243,9 @@ export function ToursPage({
       let serviceId = isUpdate ? Number(candidate.id) : null;
 
       if (isUpdate) {
-        const prevMedia = Array.isArray(candidate._rawMedia) ? candidate._rawMedia : [];
+        const prevMedia = Array.isArray(candidate._rawMedia)
+          ? candidate._rawMedia
+          : [];
         const mediaChanged =
           existingMedia.length !== prevMedia.length ||
           existingMedia.some((u, idx) => u !== prevMedia[idx]);
@@ -283,7 +304,11 @@ export function ToursPage({
       for (let i = 0; i < newDataPhotos.length; i += 1) {
         try {
           const file = await dataUrlToFile(newDataPhotos[i], i + 1);
-          await catalogAdminApi.uploadServiceMedia(serviceId, file, `${name}-${i + 1}`);
+          await catalogAdminApi.uploadServiceMedia(
+            serviceId,
+            file,
+            `${name}-${i + 1}`
+          );
         } catch {
           // non-fatal: photo upload failure should not block save
         }
@@ -292,7 +317,7 @@ export function ToursPage({
       await fetchToursData(true);
       return { ...candidate, id: serviceId };
     },
-    [fetchToursData],
+    [fetchToursData]
   );
 
   // -------------------------------------------------------------------------
