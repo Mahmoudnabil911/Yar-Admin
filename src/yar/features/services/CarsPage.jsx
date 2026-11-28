@@ -14,14 +14,16 @@ function mapServiceStatus(service) {
 function mapCarRecord(service, rates) {
   const serviceRates = rates.filter((r) => Number(r.service_id) === Number(service.id));
   const activeRates = serviceRates.filter((r) => r.active !== false);
-  const attrs = service.attributes && typeof service.attributes === 'object' ? service.attributes : {};
+  const attrs =
+    service.attributes && typeof service.attributes === 'object' ? service.attributes : {};
 
   return {
     id: service.id,
     name: service.name || '',
     model: (service.car_model && String(service.car_model)) || String(attrs.model || ''),
     seatCount: service.capacity != null ? Number(service.capacity) : 1,
-    bags: service.luggage_capacity != null ? Number(service.luggage_capacity) : Number(attrs.bags || 0),
+    bags:
+      service.luggage_capacity != null ? Number(service.luggage_capacity) : Number(attrs.bags || 0),
     photos: Array.isArray(service.media) ? service.media : [],
     serviceProvider: service.supplier_id ? String(service.supplier_id) : '',
     cityPrices: activeRates.map((rate) => ({
@@ -85,7 +87,7 @@ export function CarsPage({
         name: sup.name || `مورد #${sup.id}`,
         serviceType: 'transfer',
         status: sup.active === false ? 'archived' : 'published',
-      }))
+      })),
     );
     setHasLoaded(true);
   }, []);
@@ -112,7 +114,7 @@ export function CarsPage({
       await fetchCarsData(true);
       return restore ? 'draft' : 'archived';
     },
-    [fetchCarsData]
+    [fetchCarsData],
   );
 
   const handleSaveCar = useCallback(
@@ -132,13 +134,20 @@ export function CarsPage({
         throw new Error('يرجى تحديد المدينة في قائمة الأسعار.');
       }
 
-      const basePrice = Math.min(
-        ...validCityPrices.map((cp) => Number(cp.oneWayUSD) || 0)
-      );
+      const basePrice = Math.min(...validCityPrices.map((cp) => Number(cp.oneWayUSD) || 0));
 
       const photos = Array.isArray(candidate.photos) ? candidate.photos : [];
-      const existingMedia = photos.filter((src) => typeof src === 'string' && !src.startsWith('data:'));
-      const newDataPhotos = photos.filter((src) => typeof src === 'string' && src.startsWith('data:'));
+      const existingMedia = photos.filter(
+        (src) => typeof src === 'string' && !src.startsWith('data:'),
+      );
+      const newDataPhotos = photos.filter(
+        (src) => typeof src === 'string' && src.startsWith('data:'),
+      );
+
+      const primaryCity = String(validCityPrices[0].city).trim();
+      const baseCost = Math.min(
+        ...validCityPrices.map((cp) => Number(cp.pickup_supplier_cost_usd ?? 0)),
+      );
 
       const parsedSupplierId = Number(candidate.serviceProvider);
       const supplierPayload =
@@ -149,14 +158,29 @@ export function CarsPage({
       const servicePayload = {
         name,
         service_type: 'car',
+        description: `${name} - ${model}`,
+        city: primaryCity,
+        pickup_location: primaryCity,
+        dropoff_location: primaryCity,
+        duration_minutes: 60,
         car_model: model,
         capacity: Number(candidate.seatCount) || 1,
         luggage_capacity: Number(candidate.bags) || 0,
         price_usd: basePrice >= 0 ? basePrice : 0,
+        supplier_cost_usd: baseCost >= 0 ? baseCost : 0,
+        media: existingMedia,
+        attributes: {
+          model,
+          bags: Number(candidate.bags) || 0,
+        },
         published: candidate.status === 'published',
         active: candidate.status !== 'archived',
         ...supplierPayload,
       };
+
+      const fallbackPayload = { ...servicePayload };
+      delete fallbackPayload.car_model;
+      delete fallbackPayload.luggage_capacity;
 
       const isUpdate = Boolean(candidate.id && Number(candidate.id) > 0);
       let serviceId = isUpdate ? Number(candidate.id) : null;
@@ -166,12 +190,33 @@ export function CarsPage({
         const mediaChanged =
           existingMedia.length !== prevMedia.length ||
           existingMedia.some((u, idx) => u !== prevMedia[idx]);
-        await catalogAdminApi.updateService(serviceId, {
-          ...servicePayload,
-          ...(mediaChanged ? { media: existingMedia } : {}),
-        });
+        const patchExtra = mediaChanged ? { media: existingMedia } : {};
+        try {
+          await catalogAdminApi.updateService(serviceId, {
+            ...servicePayload,
+            ...patchExtra,
+          });
+        } catch (err) {
+          if (err?.status === 400 || err?.code === 'invalid_request') {
+            await catalogAdminApi.updateService(serviceId, {
+              ...fallbackPayload,
+              ...patchExtra,
+            });
+          } else {
+            throw err;
+          }
+        }
       } else {
-        const created = await catalogAdminApi.createService(servicePayload);
+        let created;
+        try {
+          created = await catalogAdminApi.createService(servicePayload);
+        } catch (err) {
+          if (err?.status === 400 || err?.code === 'invalid_request') {
+            created = await catalogAdminApi.createService(fallbackPayload);
+          } else {
+            throw err;
+          }
+        }
         serviceId = Number(created.id);
       }
 
@@ -191,7 +236,9 @@ export function CarsPage({
         const roundtripPrice = Number(row.roundTripUSD) || 0;
         const matchedRate =
           (row.id ? existingRates.find((r) => Number(r.id) === Number(row.id)) : null) ||
-          existingRates.find((r) => String(r.city).trim() === city && !keptRateIds.has(Number(r.id)));
+          existingRates.find(
+            (r) => String(r.city).trim() === city && !keptRateIds.has(Number(r.id)),
+          );
 
         if (matchedRate) {
           keptRateIds.add(Number(matchedRate.id));
@@ -201,10 +248,10 @@ export function CarsPage({
             pickup_price_usd: pickupPrice,
             roundtrip_price_usd: roundtripPrice,
             pickup_supplier_cost_usd: Number(
-              row.pickup_supplier_cost_usd ?? matchedRate.pickup_supplier_cost_usd ?? 0
+              row.pickup_supplier_cost_usd ?? matchedRate.pickup_supplier_cost_usd ?? 0,
             ),
             roundtrip_supplier_cost_usd: Number(
-              row.roundtrip_supplier_cost_usd ?? matchedRate.roundtrip_supplier_cost_usd ?? 0
+              row.roundtrip_supplier_cost_usd ?? matchedRate.roundtrip_supplier_cost_usd ?? 0,
             ),
             active: true,
           });
@@ -231,7 +278,7 @@ export function CarsPage({
       await fetchCarsData(true);
       return { ...candidate, id: serviceId };
     },
-    [fetchCarsData]
+    [fetchCarsData],
   );
 
   if (!hasAuth) {
