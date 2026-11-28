@@ -448,7 +448,7 @@ export function ProviderOpsPage({ searchQuery = '', onSearchChange, onNavigate }
 
             <div className="ops-form-grid" style={{ marginBottom: 16 }}>
               <label className="ops-field">
-                <span>أولوية الاختيار</span>
+                <span>أولوية الاختيار<span className="required-mark">*</span></span>
                 <input
                   type="number"
                   min="1"

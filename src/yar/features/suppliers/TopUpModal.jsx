@@ -62,7 +62,7 @@ export function TopUpModal({ initialProviderId = '', initialCurrency = 'USD', pr
       ) : (
         <form className="ops-form-grid" onSubmit={handleSubmit}>
           <label className="ops-field wide">
-            <span>المورّد</span>
+            <span>المورّد<span className="required-mark">*</span></span>
             <select value={providerId} onChange={e => setProviderId(e.target.value)} required disabled={submitting}>
               <option value="">اختر المورّد</option>
               {availableProviders.map(p => (
@@ -77,7 +77,7 @@ export function TopUpModal({ initialProviderId = '', initialCurrency = 'USD', pr
           </label>
 
           <label className="ops-field">
-            <span>مبلغ الإيداع ($)</span>
+            <span>مبلغ الإيداع ($)<span className="required-mark">*</span></span>
             <NumberInput
               min={0.01}
               value={amount}
@@ -89,7 +89,7 @@ export function TopUpModal({ initialProviderId = '', initialCurrency = 'USD', pr
           </label>
 
           <label className="ops-field wide">
-            <span>مرجع الإيداع</span>
+            <span>مرجع الإيداع<span className="required-mark">*</span></span>
             <input
               type="text"
               value={reference}

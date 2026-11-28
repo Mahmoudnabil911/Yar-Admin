@@ -235,7 +235,7 @@ export function BookingDrawer({ bookingId, onOpenFinance, onNavigate }) {
             {targetStatus === 'cancelled' && (
               <>
                 <label className="ops-field wide">
-                  <span>سبب الإلغاء</span>
+                  <span>سبب الإلغاء<span className="required-mark">*</span></span>
                   <textarea
                     rows="2"
                     value={transitionReason}

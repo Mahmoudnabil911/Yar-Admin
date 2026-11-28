@@ -190,7 +190,7 @@ export function ManageRoomsModal({
             <h4 style={{ margin: '0 0 12px', fontSize: 14 }}>إضافة غرفة جديدة إلى {hotel.name}</h4>
             <form onSubmit={handleCreateRoom} className="ops-form-grid">
               <label className="ops-field wide">
-                <span>اسم الغرفة *</span>
+                <span>اسم الغرفة<span className="required-mark">*</span></span>
                 <input
                   type="text"
                   value={roomName}
@@ -351,7 +351,7 @@ export function ManageRoomsModal({
                       <h5 style={{ margin: '0 0 10px', fontSize: 13 }}>إضافة خطة سعر للغرفة</h5>
                       <form onSubmit={e => handleCreateRate(e, room.id)} className="ops-form-grid">
                         <label className="ops-field wide">
-                          <span>اسم خطة السعر *</span>
+                          <span>اسم خطة السعر<span className="required-mark">*</span></span>
                           <input
                             type="text"
                             value={rateName}
@@ -376,7 +376,7 @@ export function ManageRoomsModal({
                         </label>
 
                         <label className="ops-field">
-                          <span>سعر البيع للعميل ($ دولار) *</span>
+                          <span>سعر البيع للعميل ($ دولار)<span className="required-mark">*</span></span>
                           <NumberInput
                             min={1}
                             value={ratePriceUsd}

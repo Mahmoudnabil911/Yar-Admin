@@ -225,7 +225,7 @@ export function ManagePackageOptionsModal({
             <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>إضافة خيار أو فئة جديدة</h4>
             <div className="ops-form-grid">
               <label className="ops-field wide">
-                <span>اسم الفئة / الغرفة / البرنامج *</span>
+                <span>اسم الفئة / الغرفة / البرنامج<span className="required-mark">*</span></span>
                 <input
                   type="text"
                   value={optName}
@@ -236,7 +236,7 @@ export function ManagePackageOptionsModal({
               </label>
 
               <label className="ops-field">
-                <span>سعر البيع بالدولار ($ USD) *</span>
+                <span>سعر البيع بالدولار ($ USD)<span className="required-mark">*</span></span>
                 <NumberInput
                   min={0}
                   value={optPriceUsd}

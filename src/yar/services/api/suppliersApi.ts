@@ -78,7 +78,7 @@ export interface CreateSupplierPayload {
   active?: boolean;
   service_type?: 'flight' | 'hotel' | 'car' | 'tour' | 'package' | string;
   integration?: 'manual' | 'api' | string;
-  channel?: 'manual' | 'gds' | 'ndc' | 'direct' | string;
+  channel?: 'manual' | 'gds' | 'ndc' | 'other' | string;
   operating_enabled?: boolean;
   priority?: number | string;
   coverage_cities?: string;

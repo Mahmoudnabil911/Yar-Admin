@@ -281,7 +281,7 @@ export default function PricingRuleModal({
           </label>
 
           <label className="pr-field" htmlFor="pr-rule-value">
-            <span>{valueLabel}</span>
+            <span>{valueLabel}<span className="required-mark">*</span></span>
             <NumberInput
               id="pr-rule-value"
               min={0}

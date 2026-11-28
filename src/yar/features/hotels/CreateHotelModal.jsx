@@ -130,7 +130,7 @@ export function CreateHotelModal({
         <form className="ops-form-grid" onSubmit={handleSubmit}>
           {/* Hotel Name */}
           <label className="ops-field wide">
-            <span>اسم الفندق *</span>
+            <span>اسم الفندق<span className="required-mark">*</span></span>
             <input
               type="text"
               value={name}
@@ -163,7 +163,7 @@ export function CreateHotelModal({
 
           {/* Stars */}
           <label className="ops-field">
-            <span>تصنيف النجوم *</span>
+            <span>تصنيف النجوم<span className="required-mark">*</span></span>
             <select
               value={stars}
               onChange={e => setStars(Number(e.target.value))}

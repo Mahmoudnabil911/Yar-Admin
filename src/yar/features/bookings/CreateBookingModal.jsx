@@ -232,7 +232,7 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
         <form className="ops-form-grid" onSubmit={handleSubmit}>
           {/* Service Type */}
           <label className="ops-field wide">
-            <span>نوع الخدمة *</span>
+            <span>نوع الخدمة<span className="required-mark">*</span></span>
             <select
               value={serviceType}
               onChange={e => setServiceType(e.target.value)}
@@ -270,7 +270,7 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
             <>
               <div className="ops-field wide" style={{ marginBottom: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <span style={{ fontWeight: 600 }}>سعر الغرفة *</span>
+                  <span style={{ fontWeight: 600 }}>سعر الغرفة<span className="required-mark">*</span></span>
                 </div>
 
                 {roomRates.length > 0 ? (
@@ -299,7 +299,7 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
               </div>
 
               <label className="ops-field">
-                <span>تاريخ الوصول *</span>
+                <span>تاريخ الوصول<span className="required-mark">*</span></span>
                 <input
                   type="date"
                   value={checkin}
@@ -309,7 +309,7 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
               </label>
 
               <label className="ops-field">
-                <span>تاريخ المغادرة *</span>
+                <span>تاريخ المغادرة<span className="required-mark">*</span></span>
                 <input
                   type="date"
                   value={checkout}
@@ -323,7 +323,7 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
             <>
               <div className="ops-field wide" style={{ marginBottom: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <span style={{ fontWeight: 600 }}>الخدمة المطلوبة *</span>
+                  <span style={{ fontWeight: 600 }}>الخدمة المطلوبة<span className="required-mark">*</span></span>
                 </div>
 
                 {matchingServices.length > 0 ? (
@@ -369,7 +369,7 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
               </label>
 
               <label className="ops-field">
-                <span>موعد الانطلاق *</span>
+                <span>موعد الانطلاق<span className="required-mark">*</span></span>
                 <input
                   type="datetime-local"
                   value={departureAt}
@@ -392,7 +392,7 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
 
           {/* Counts */}
           <label className="ops-field">
-            <span>{serviceType === 'hotel' ? 'عدد الغرف' : 'الكمية'} *</span>
+            <span>{serviceType === 'hotel' ? 'عدد الغرف' : 'الكمية'}<span className="required-mark">*</span></span>
             <input
               type="number"
               min="1"
@@ -404,7 +404,7 @@ export function CreateBookingModal({ isOpen, open, onClose, onCreated, onSuccess
           </label>
 
           <label className="ops-field">
-            <span>عدد البالغين *</span>
+            <span>عدد البالغين<span className="required-mark">*</span></span>
             <input
               type="number"
               min="1"

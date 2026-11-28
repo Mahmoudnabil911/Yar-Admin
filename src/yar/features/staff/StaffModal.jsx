@@ -88,7 +88,7 @@ export default function StaffModal({ isOpen, onClose, staffMember, onSave }) {
 
         <div className="stf-form-grid">
           <label className="stf-field stf-wide">
-            اسم الموظف
+            <span>اسم الموظف<span className="required-mark">*</span></span>
             <input
               required
               minLength={2}

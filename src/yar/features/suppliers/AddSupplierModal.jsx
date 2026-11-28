@@ -28,6 +28,10 @@ export function AddSupplierModal({ onClose, onCreated }) {
       setErrorMsg('اسم المورّد مطلوب.');
       return;
     }
+    if (!coverageCities.trim()) {
+      setErrorMsg('المدن المغطاة مطلوبة.');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -71,7 +75,7 @@ export function AddSupplierModal({ onClose, onCreated }) {
 
       <form className="ops-form-grid" onSubmit={handleSubmit}>
         <label className="ops-field wide">
-          <span>اسم المورّد *</span>
+          <span>اسم المورّد<span className="required-mark">*</span></span>
           <input
             type="text"
             value={name}
@@ -94,8 +98,8 @@ export function AddSupplierModal({ onClose, onCreated }) {
         </label>
 
         <label className="ops-field">
-          <span>نوع الخدمة</span>
-          <select value={serviceType} onChange={e => setServiceType(e.target.value)} disabled={submitting}>
+          <span>نوع الخدمة<span className="required-mark">*</span></span>
+          <select value={serviceType} onChange={e => setServiceType(e.target.value)} required disabled={submitting}>
             <option value="flight">طيران (Flight)</option>
             <option value="hotel">فنادق (Hotel)</option>
             <option value="car">نقل وسيارات (Transfer)</option>
@@ -127,50 +131,52 @@ export function AddSupplierModal({ onClose, onCreated }) {
         </label>
 
         <label className="ops-field">
-          <span>طريقة الربط</span>
-          <select value={integration} onChange={e => setIntegration(e.target.value)} disabled={submitting}>
+          <span>طريقة الربط<span className="required-mark">*</span></span>
+          <select value={integration} onChange={e => setIntegration(e.target.value)} required disabled={submitting}>
             <option value="manual">يدوي (Manual)</option>
             <option value="api">واجهة برمجية (API)</option>
           </select>
         </label>
 
         <label className="ops-field">
-          <span>القناة (Channel)</span>
-          <select value={channel} onChange={e => setChannel(e.target.value)} disabled={submitting}>
+          <span>القناة (Channel)<span className="required-mark">*</span></span>
+          <select value={channel} onChange={e => setChannel(e.target.value)} required disabled={submitting}>
             <option value="manual">Manual</option>
             <option value="gds">GDS</option>
             <option value="ndc">NDC</option>
-            <option value="direct">Direct</option>
+            <option value="other">Other</option>
           </select>
         </label>
 
         <label className="ops-field">
-          <span>بيئة التشغيل</span>
-          <select value={environment} onChange={e => setEnvironment(e.target.value)} disabled={submitting}>
+          <span>بيئة التشغيل<span className="required-mark">*</span></span>
+          <select value={environment} onChange={e => setEnvironment(e.target.value)} required disabled={submitting}>
             <option value="test">بيئة تجريبية (Test)</option>
             <option value="production">بيئة الإنتاج (Production)</option>
           </select>
         </label>
 
         <label className="ops-field">
-          <span>الأولوية</span>
+          <span>الأولوية<span className="required-mark">*</span></span>
           <input
             type="number"
             min="1"
             max="10"
             value={priority}
             onChange={e => setPriority(e.target.value)}
+            required
             disabled={submitting}
           />
         </label>
 
         <label className="ops-field wide">
-          <span>المدن المغطاة</span>
+          <span>المدن المغطاة<span className="required-mark">*</span></span>
           <input
             type="text"
             value={coverageCities}
             onChange={e => setCoverageCities(e.target.value)}
             placeholder="مثال: بغداد، أربيل، النجف، طهران"
+            required
             disabled={submitting}
           />
         </label>

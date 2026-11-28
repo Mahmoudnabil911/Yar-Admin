@@ -132,7 +132,7 @@ export function CreatePackageModal({ isOpen, open, onClose, packageToEdit = null
         <form className="ops-form-grid" onSubmit={handleSubmit}>
           {/* Package Name */}
           <label className="ops-field wide">
-            <span>اسم الباقة السياحية *</span>
+            <span>اسم الباقة السياحية<span className="required-mark">*</span></span>
             <input
               type="text"
               value={name}
@@ -167,7 +167,7 @@ export function CreatePackageModal({ isOpen, open, onClose, packageToEdit = null
 
           {/* Price USD */}
           <label className="ops-field">
-            <span>سعر البيع الافتراضي ($ USD) *</span>
+            <span>سعر البيع الافتراضي ($ USD)<span className="required-mark">*</span></span>
             <NumberInput
               min={0}
               value={priceUsd}
